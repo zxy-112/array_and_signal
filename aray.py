@@ -193,7 +193,7 @@ class Array:
         assert self.is_good_points(points), '错误的点数'
         assert self.elements, '无阵元，无阵列流形'
 
-    def response_plot(self, weight_vector):
+    def response_plot(self, weight_vector, fig_ax_pair=None, **plot_kwargs):
         """
         绘制响应曲线，需要重写
         """
@@ -255,13 +255,14 @@ class LineArray(Array):
         else:
             return response.flatten()
 
-    def response_plot(self, weight_vector):
+    def response_plot(self, weight_vector, fig_ax_pair=(None, None), **plot_kwargs):
         Array.response_plot(self, weight_vector)
-        fig, ax = None, None
-        if self.elements:
-            response, thetas = self.response_with(-90, 90, 361, weight_vector, True)
+        fig, ax = fig_ax_pair
+        if fig is None:
             fig, ax = plt.subplots()
-            ax.plot(thetas, value_to_decibel(np.abs(response)))
+        if self.elements:
+            response, thetas = self.response_with(-90, 90, 3601, weight_vector, True)
+            ax.plot(thetas, value_to_decibel(np.abs(response)), **plot_kwargs)
             fig.show()
         return fig, ax
 
