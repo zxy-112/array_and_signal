@@ -6,7 +6,7 @@ pinv_fast = lambda x: pinv(x, hermitian=True)
 
 def value_to_decibel(vector):
     res = 20 * np.log10(vector / np.max(vector))
-    res[res < -60] = -60
+    res[res < -70] = -70
     return res
 
 def make_dic_maker(dic):
@@ -34,8 +34,11 @@ def mvdr(output, expect_theta, steer_func):
     temp = np.matmul(inv_mat, steer_vector)
     return temp / (hermitian(steer_vector) @ inv_mat @ steer_vector).item()
 
-def my_plot(*args, **kwargs):
-    fig, ax = plt.subplots()
+def my_plot(*args, fig_ax_pair=(None, None), **kwargs):
+    if fig_ax_pair == (None, None):
+        fig, ax = plt.subplots()
+    else:
+        fig, ax = fig_ax_pair
     ax.plot(*args, **kwargs)
     fig.show()
     return fig, ax
@@ -132,8 +135,9 @@ def ctp(output, expect_theta, coherent_theta, steer_func, sigma_power):
             )
     u, s, _ = np.linalg.svd(newly_created_cov, hermitian=True)
     count = 0
+    refer_sum = np.sum(s) / len(s)
     for item in s:
-        if item > 5 * sigma_power:
+        if item > refer_sum:
             count += 1
     matrix_u = None
     if count == 0:
@@ -144,4 +148,10 @@ def ctp(output, expect_theta, coherent_theta, steer_func, sigma_power):
     # eig_vec = u2[:, :1]
     max_index = max(range(count+1), key=lambda index: np.linalg.norm((np.eye(len(cov_mat)) - matrix_t @ hermitian(matrix_t)) @ u2[:, index: index+1]))
     return (np.eye(len(cov_mat)) - matrix_t @ hermitian(matrix_t)) @ u2[:, max_index: max_index+1]
+
+def duvall(output, expect_theta, steer_func):
+    steer_vector = steer_func(expect_theta)
+    output = np.multiply(output, np.conjugate(steer_vector))
+    delta = output[:-1, :] - output[1:, :]
+    return mvdr(delta, 0, lambda x: steer_func(x)[:-1, :])
 
