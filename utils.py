@@ -149,9 +149,27 @@ def ctp(output, expect_theta, coherent_theta, steer_func, sigma_power):
     max_index = max(range(count+1), key=lambda index: np.linalg.norm((np.eye(len(cov_mat)) - matrix_t @ hermitian(matrix_t)) @ u2[:, index: index+1]))
     return (np.eye(len(cov_mat)) - matrix_t @ hermitian(matrix_t)) @ u2[:, max_index: max_index+1]
 
-def duvall(output, expect_theta, steer_func):
+def duvall(output, expect_theta, steer_func, retoutput=False):
     steer_vector = steer_func(expect_theta)
     output = np.multiply(output, np.conjugate(steer_vector))
     delta = output[:-1, :] - output[1:, :]
-    return mvdr(delta, 0, lambda x: steer_func(x)[:-1, :])
+    weight = mvdr(delta, 0, lambda x: steer_func(x)[:-1, :])
+    if not retoutput:
+        return weight
+    else:
+        return weight, syn(weight, output[:-1, :])
 
+def yang_ho_chi(output, coherent_number, steer_func, expect_theta=0, retoutput=False):
+    ele_num = len(output)
+    d = ele_num - coherent_number
+    delta = output[:-1, :] - output[1:, :]
+    xm = np.conjugate(output[-1:, :])
+    r = np.sum(np.multiply(delta, xm), axis=1, keepdims=True) / output.shape[1]
+    matrix_rc = np.hstack([r[index: index+d] for index in range(coherent_number)])
+    q, _ = np.linalg.qr(matrix_rc)
+    q = q[:, :d]
+    weight = (np.eye(d) - q @ hermitian(q)) @ steer_func(expect_theta)[:d, :]
+    if not retoutput:
+        return weight
+    else:
+        return weight, syn(weight, output[:d, :])
