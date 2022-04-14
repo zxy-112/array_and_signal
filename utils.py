@@ -1,3 +1,5 @@
+import os
+import json
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -34,11 +36,13 @@ def mvdr(output, expect_theta, steer_func):
     temp = np.matmul(inv_mat, steer_vector)
     return temp / (hermitian(steer_vector) @ inv_mat @ steer_vector).item()
 
-def my_plot(*args, fig_ax_pair=(None, None), **kwargs):
+def my_plot(*args, fig_ax_pair=(None, None), num=None, **kwargs):
     if fig_ax_pair == (None, None):
         fig, ax = plt.subplots()
     else:
         fig, ax = fig_ax_pair
+    if num is not None:
+        fig.canvas.manager.set_window_title(num)
     ax.plot(*args, **kwargs)
     fig.show()
     return fig, ax
@@ -173,3 +177,24 @@ def yang_ho_chi(output, coherent_number, steer_func, expect_theta=0, retoutput=F
         return weight
     else:
         return weight, syn(weight, output[:d, :])
+
+def data_generate(data_iterable, save_path):
+    index = 0
+    info_dic = {}
+    name_func_maker = lambda x: lambda y: os.path.join(save_path, x+str(y)+'.npy')
+    x_name_func = name_func_maker('x')
+    y_name_func = name_func_maker('y')
+    def save_func(name, data):
+        with open(name, 'wb') as f:
+            np.save(f, data)
+    for x, y, info in data_iterable:
+        save_func(x_name_func(index), x)
+        save_func(y_name_func(index), y)
+        info_dic[str(index)] = info
+        index += 1
+    with open(os.path.join(save_path, 'info.txt'), 'w') as f:
+        json.dump(info_dic, f, indent=4)
+
+if __name__ == '__main__':
+    test_data = ((1, 2, {'name': 'zxy', 'age': 22}) for _ in range(1))
+    data_generate(test_data, '/Users/zhangxingyu/new')

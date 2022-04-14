@@ -31,6 +31,7 @@ class Array:
 
     noise_power = 1
     implemented = False
+    noise_reproducible = True  # for every element its noise is reproducible
 
     def __init__(self, size, reference_position):
         assert self.check_size(size)
@@ -39,7 +40,7 @@ class Array:
         self.reference = ReferenceElement()
         self.reference.add_to(self, reference_position)
         self.elements = []
-        self.noise = signl.GaussionNoise()
+        # self.noise = signl.GaussionNoise()
         self.sample_points = None
 
     @property
@@ -87,9 +88,13 @@ class Array:
     def signal_at(self, element):
         assert element in self.elements, '该阵元不在阵列上'
         assert self.sample_points is not None, '需要先对信号采样，先应用sample方法'
-        self.noise.amplitude = np.sqrt(self.noise_power)
-        self.noise.sample(self.sample_points)
-        noise = self.noise.signal
+        amplitude = np.sqrt(self.noise_power / 2)
+        if self.noise_reproducible:
+            index = self.elements.index(element)
+            rng = np.random.default_rng(seed=index)
+        else:
+            rng = np.random.default_rng()
+        noise = rng.standard_normal(self.sample_points) * amplitude + rng.standard_normal(self.sample_points) * amplitude * 1j
         return np.sum(self._signal_at(element), axis=0, keepdims=False) + noise
 
     def remove_element(self, element):
