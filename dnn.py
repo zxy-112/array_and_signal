@@ -78,12 +78,12 @@ class CNN(nn.Module):
         super(CNN, self).__init__()
 
         self.feature_acquire = make_layers(plan)
-        self.linear = nn.Conv2d(512, 16, kernel_size=1)
+        self.linear = nn.Conv2d(512, 16 * 2, kernel_size=1)
 
     def forward(self, x):
         output = self.feature_acquire(x)
         output = self.linear(output)
-        output = output.view(output.shape[0], 16, 16)
+        output = output.view(output.shape[0], 2, 16, 16)
 
         return output
 
@@ -128,9 +128,9 @@ def train_loop(dataloader, model, loss_fn, optimizer):
         loss.backward()
         optimizer.step()
 
-        if batch % 100 == 0:
+        if batch % 5 == 0:
             loss, current = loss.item(), batch * len(x)
-            print('loss: {:>7f}   [{:>5d}/{:>5d}]'.format(current, size))
+            print('loss: {:>7f}   [{:>5d}/{:>5d}]'.format(loss, current, size))
 
 def test_loop(dataloader, model, loss_fn):
     size = len(dataloader.dataset)
@@ -148,5 +148,5 @@ def test_loop(dataloader, model, loss_fn):
 for epoch in range(epochs):
     print('Epoch {}\n-----------------'.format(epoch+1))
     train_loop(train_dataloader, model, loss_fn, optimizer)
-    test_loop(test_dataloader, model, optimizer)
+    test_loop(test_dataloader, model, loss_fn)
 print('Done')

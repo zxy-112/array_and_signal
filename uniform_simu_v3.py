@@ -24,7 +24,7 @@ def signals_maker(expect_theta=0, coherent_theta=(20,), incoherent_theta=(-30,),
     for theta, ratio in zip(incoherent_theta, inr):
         yield signl.CosWave2D(theta=theta, signal_type='interference', amplitude=decibel2val(ratio))
 
-def aray_maker(ele_num=16, sample_points=16**2):
+def aray_maker(ele_num=16):
     ary = aray.UniformLineArray()
     for _ in range(ele_num):
         ary.add_element(aray.Element())
@@ -36,7 +36,7 @@ def simulate_example():
     incoherent_theta = (-30,)
     expect_theta = 0
     signals = list(signals_maker(coherent_theta=coherent_theta, incoherent_theta=incoherent_theta))
-    sample_points = 1000
+    sample_points = ele_num ** 2
     ary = aray_maker()
     ary_for_plot = aray_maker(ele_num-1)
     ary_for_chi = aray_maker(ele_num-len(coherent_theta))
@@ -97,6 +97,7 @@ def data_generator():
     ele_num = 16
     cnr_num = 1
     inr_num = 1
+    sample_points = ele_num ** 2
 
     ary = aray.UniformLineArray()
     for _ in range(ele_num):
@@ -156,7 +157,7 @@ def data_generator():
                 real_cov += power * np.matmul(steer_vector, hermitian(steer_vector))
             for signal in signals:
                 ary.receive_signal(signal)
-            ary.sample(1000)
+            ary.sample(sample_points)
             output = ary.output
             info_dic = {
                     'coherent_theta': coherent_theta,
