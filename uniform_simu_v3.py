@@ -24,7 +24,7 @@ def signals_maker(expect_theta=0, coherent_theta=(20,), incoherent_theta=(-30,),
     for theta, ratio in zip(incoherent_theta, inr):
         yield signl.CosWave2D(theta=theta, signal_type='interference', amplitude=decibel2val(ratio))
 
-def aray_maker(ele_num=16, sample_points=1000):
+def aray_maker(ele_num=16, sample_points=16**2):
     ary = aray.UniformLineArray()
     for _ in range(ele_num):
         ary.add_element(aray.Element())
@@ -73,8 +73,7 @@ def simulate_example():
     methods = ['MVDR', 'MCMV', 'CTMV', 'CTP', 'Duvall', 'yang_ho_chi']
     # 响应
     plt.rc('axes', prop_cycle=custom_cycler)
-    with plt.ioff():
-        fig_ax = plt.subplots()
+    fig_ax = plt.subplots()
     weights = [adaptive_weight, mcmv_weight, ctmv_weight, ctp_weight]
     for weight in weights:
         ary.response_plot(weight, fig_ax_pair=fig_ax)
@@ -91,6 +90,8 @@ def simulate_example():
         my_plot(normalize(np.real(syn(item, output))), num=name)
     my_plot(normalize(np.real(duvall_output)), num='duvall_based')
     my_plot(normalize(np.real(yang_ho_chi_output)), num='yang_ho_chi')
+
+    return fig_ax
 
 def data_generator():
     ele_num = 16
@@ -169,8 +170,9 @@ def data_generator():
             ary.remove_all_signal()
 
 if __name__ == "__main__":
-    simulate_example()
+    fig_ax = simulate_example()
     generate_flag = input('generate data?y/n\n')
+    fig_ax[0].savefig('response.png', dpi=600)
     if generate_flag == 'y':
         data_generate(data_generator(), SAVE_PATH)
 
