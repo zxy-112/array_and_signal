@@ -94,6 +94,12 @@ print(model)
 ####################
 #######TRAIN########
 ####################
+log_file_name = 'log.txt'
+def write_log(message):
+    print(message)
+    with open(log_file_name, 'a') as f:
+        f.writeline(message)
+
 train_dataloader = DataLoader(ArrayDataset(length=9000), batch_size=64, shuffle=True)
 test_dataloader = DataLoader(ArrayDataset(offset=9000, length=1000), batch_size=64)
 loss_fn = nn.MSELoss()
@@ -130,7 +136,7 @@ def train_loop(dataloader, model, loss_fn, optimizer):
 
         if batch % 5 == 0:
             loss, current = loss.item(), batch * len(x)
-            print('loss: {:>7f}   [{:>5d}/{:>5d}]'.format(loss, current, size))
+            write_log('loss: {:>7f}   [{:>5d}/{:>5d}]'.format(loss, current, size))
 
 def test_loop(dataloader, model, loss_fn):
     size = len(dataloader.dataset)
@@ -143,10 +149,11 @@ def test_loop(dataloader, model, loss_fn):
             test_loss += loss_fn(pred, y)
 
     test_loss = test_loss / num_batches
-    print('Test loss: {:>8f}\n'.format(test_loss))
+    write_log('Test loss: {:>8f}\n'.format(test_loss))
 
 for epoch in range(epochs):
-    print('Epoch {}\n-----------------'.format(epoch+1))
+    write_log('Epoch {}\n-----------------'.format(epoch+1))
     train_loop(train_dataloader, model, loss_fn, optimizer)
     test_loop(test_dataloader, model, loss_fn)
-print('Done')
+    torch.save(model, 'check_point{}.pth'.format(epoch+1))
+write_log('Done')
