@@ -1,4 +1,5 @@
 import os
+import time
 import numpy as np
 import torch
 from torch import nn
@@ -98,7 +99,7 @@ log_file_name = 'log.txt'
 def write_log(message):
     print(message)
     with open(log_file_name, 'a') as f:
-        f.writeline(message)
+        f.write(message+'\n')
 
 train_dataloader = DataLoader(ArrayDataset(length=9000), batch_size=64, shuffle=True)
 test_dataloader = DataLoader(ArrayDataset(offset=9000, length=1000), batch_size=64)
@@ -151,6 +152,7 @@ def test_loop(dataloader, model, loss_fn):
     test_loss = test_loss / num_batches
     write_log('Test loss: {:>8f}\n'.format(test_loss))
 
+write_log(time.ctime())
 for epoch in range(epochs):
     write_log('Epoch {}\n-----------------'.format(epoch+1))
     train_loop(train_dataloader, model, loss_fn, optimizer)
