@@ -271,6 +271,22 @@ class LineArray(Array):
             fig.show()
         return fig, ax
 
+    def plot_line(self, fig_ax_pair, **plot_kwargs):
+        color_for_theta = {'expect': 'green',
+                'coherent_interference': 'black',
+                'interference': 'red'
+                }
+        ylim = (-70, 5)
+        fig, ax = fig_ax_pair
+        ax.set_ylim(ylim)
+        for signal in self.signals:
+            ax.plot((signal.theta, signal.theta),
+                    ylim,
+                    color=color_for_theta[signal.signal_type],
+                    linewidth=1,
+                    linestyle=(0, (1, 1)))
+        return fig_ax_pair
+
     def is_good_theta(self, theta):
         return Array.is_good_theta(self, theta) and isinstance(theta, (int, float)) and -90 <= theta <= 90
 

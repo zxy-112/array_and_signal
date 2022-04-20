@@ -8,6 +8,9 @@ def is_num(x):
 def is_positive(x):
     return is_num(x) and x > 0
 
+def normalize(x):
+    return x / np.max(x)
+
 class Signal:
 
     def __init__(self, signal_length=10e-6, amplitude=1, fre_shift=0, phase_shift=0, delay=0, signal_type='expect'):
@@ -33,7 +36,7 @@ class Signal:
         if points == 0:
             self._signal = None
         else:
-            t = np.linspace(0, self.signal_length, points, endpoint=False, retstep=False)
+            t, self.interval = np.linspace(0, self.signal_length, points, endpoint=False, retstep=True)
             self._signal = self.expression(t)
             if self.delay:
                 delay_points = floor(self.delay * points / self.signal_length)
@@ -49,17 +52,49 @@ class Signal:
         """
         return self.amplitude * np.exp(1j * 2 * np.pi * self.fre_shift * t) * np.exp(1j * self.phase_shift)
 
-    def plot(self):
+    def plot(self, from_to=(None, None), fig_ax_pair=(None, None)):
         """
         绘制信号波形，某些信号需要重写以使图形美观
         """
-        fig, ax = None, None
-        if self._signal is not None:
+        assert self._signal is not None, '无信号无法绘图'
+        fig, ax = fig_ax_pair
+        if fig is None:
             fig, ax = plt.subplots()
-            ax.plot(self._signal.real)
-            ax.set_ylim((-1.2 * self.amplitude, 1.2 * self.amplitude))
-            fig.show()
+
+        begin, end = self.format(from_to)
+        ax.plot(self._signal.real[begin: end])
+        ax.set_ylim((-1.2 * self.amplitude, 1.2 * self.amplitude))
+        fig.show()
         return fig, ax
+
+    def fft_plot(self, from_to=(None, None), fig_ax_pair=(None, None)):
+        assert self._signal is not None, '无信号无法绘图'
+        fig, ax = fig_ax_pair
+        if fig is None:
+            fig, ax = plt.subplots()
+
+        begin, end = self.format(from_to)
+        fft = lambda x: np.fft.fftshift(np.fft.fft(x))
+        fftfreq = lambda n: np.fft.fftshift(np.fft.fftfreq(n))
+
+        interest_signal = self._signal[begin: end]
+        res = fft(interest_signal)
+        freq = fftfreq(res.size)
+        ax.plot(freq, normalize(np.abs(res)))
+        fig.show()
+        return fig, ax
+
+    def check(self, begin, end):
+        assert isinstance(begin, int) and isinstance(end, int), '必须为整数'
+        assert 0 <= begin < end <= len(self._signal), '超出了范围'
+
+    def format(self, from_to):
+        begin, end = from_to
+        begin_default, end_defult = (0, len(self._signal))
+        begin = begin if begin else begin_default
+        end = end if end else end_defult
+        self.check(begin, end)
+        return begin, end
 
     @property
     def band_width(self):
@@ -230,6 +265,14 @@ class GaussionNoise(Signal):
         else:
             return self.points / self.signal_length
 
+class ZeroSignal(Signal):
+
+    def __init__(self, signal_length):
+        Signal.__init__(self, signal_length=signal_length)
+
+    def expression(self, t):
+        return np.zeros_like(t)
+
 class NoiseWave2D(GaussionNoise, Wave2D):
 
     def __init__(self, theta=0, signal_length=10e-6, amplitude=1, fre_shift=0, phase_shift=0, delay=0, signal_type='expect'):
@@ -258,6 +301,57 @@ class NoiseWave3D(GaussionNoise, Wave3D):
                 )
         Wave3D.__init__(self, theta)
 
+class SignalWave2D(Signal, Wave2D):
+
+    # 需要补充说明文档，且没有好好写和测试
+    def __init__(self, theta=0, signal_length=10e-6, amplitude=1, fre_shift=0, phase_shift=0, delay=0, signal_type='expect', new_expression=None):
+        Wave2D.__init__(self, theta=theta)
+        Signal.__init__(self,
+                signal_length=signal_length,
+                amplitude=amplitude,
+                fre_shift=fre_shift,
+                phase_shift=phase_shift,
+                delay=delay,
+                signal_type=signal_type)
+        self.new_expression = new_expression
+
+    def expression(self, t):
+        if self.new_expression is not None:
+            return self.new_expression(len(t))
+        else:
+            return Signal.expression(self, t)
+
+    @staticmethod
+    def concatenate(theta, *signal_seq, signal_type='expect'):
+
+        res_length = 0
+        length_seq = []
+        for signal in signal_seq:
+            length_seq.append(signal.signal_length)
+        signal_length = sum(length_seq)
+        ratio_seq = [item/signal_length for item in length_seq]
+        amplitude = max([item.amplitude for item in signal_seq])
+
+        def new_expression(length_of_t):
+            points_for_every = []
+            for index, item in enumerate(ratio_seq):
+                if index == len(ratio_seq) - 1:
+                    points = length_of_t - sum(points_for_every)
+                else:
+                    points = int(length_of_t * item)
+                signal_seq[index].sample(points)
+                points_for_every.append(points)
+
+            all_sampled = [item.signal for item in signal_seq]
+            return np.concatenate(all_sampled)
+
+        res = SignalWave2D(theta=theta,
+            signal_length=sum(length_seq),
+            amplitude=amplitude,
+            new_expression=new_expression,
+            signal_type=signal_type)
+        return res
+
 class NoSampleError(BaseException):
     pass
 
@@ -270,35 +364,39 @@ if __name__ == '__main__':
             pass
         else:
             assert False
-    sample_points = 1000
-    do_wrong('signal = Signal(-10)')
-    signal = Signal(10e-6)
-    print(signal)
-    do_wrong('signal.signal')
-    signal.sample(sample_points)
-    assert signal.signal.shape == (sample_points,)
-    print('signal_length: {}'.format(signal.signal_length))
-    print('signal bandwidth: {}'.format(signal.band_width))
-    signal.plot()
-    signal.fre_shift = 1e6
-    signal.sample(sample_points)
-    signal.plot()
-    signal.phase_shift = 0.5 * np.pi
-    signal.sample(sample_points)
-    signal.plot()
-    lfm = LfmWave2D()
-    do_wrong('lfm.signal')
-    lfm.plot()  # 无事发生
-    lfm.sample(sample_points)
-    lfm.plot()
-    print('lfm bandwidth: {}'.format(lfm.band_width))
-    lfm.band_width = 5e6
-    lfm.sample(sample_points)
-    lfm.plot()
-    do_wrong('lfm = LfmWave2D(signal_length=-1)')
-    noise = GaussionNoise(10e-6)
-    print('noise bandwidth: {}'.format(noise.band_width))
-    noise.sample(sample_points)
-    print('noise bandwidth: {}'.format(noise.band_width))
+    # sample_points = 1000
+    # do_wrong('signal = Signal(-10)')
+    # signal = Signal(10e-6)
+    # print(signal)
+    # do_wrong('signal.signal')
+    # signal.sample(sample_points)
+    # assert signal.signal.shape == (sample_points,)
+    # print('signal_length: {}'.format(signal.signal_length))
+    # print('signal bandwidth: {}'.format(signal.band_width))
+    # signal.plot()
+    # signal.fre_shift = 1e6
+    # signal.sample(sample_points)
+    # signal.plot()
+    # signal.phase_shift = 0.5 * np.pi
+    # signal.sample(sample_points)
+    # signal.plot()
+    # lfm = LfmWave2D()
+    # do_wrong('lfm.signal')
+    # lfm.plot()  # 无事发生
+    # lfm.sample(sample_points)
+    # lfm.plot()
+    # print('lfm bandwidth: {}'.format(lfm.band_width))
+    # lfm.band_width = 5e6
+    # lfm.sample(sample_points)
+    # lfm.plot()
+    # do_wrong('lfm = LfmWave2D(signal_length=-1)')
+    # noise = GaussionNoise(10e-6)
+    # print('noise bandwidth: {}'.format(noise.band_width))
+    # noise.sample(sample_points)
+    # print('noise bandwidth: {}'.format(noise.band_width))
 
-    print('all test passed')
+    # print('all test passed')
+    lfm = Lfm()
+    lfm.sample(1000)
+    lfm.fft_plot(from_to=(0, 700))
+    lfm.fft_plot(from_to=(0, 200))

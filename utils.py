@@ -47,6 +47,15 @@ def my_plot(*args, fig_ax_pair=(None, None), num=None, **kwargs):
     fig.show()
     return fig, ax
 
+def plot_position(theta, fig_ax_pair=(None, None), num=None, **kwargs):
+    fig_ax = my_plot((theta, theta),
+            (5, -70),
+            fig_ax_pair=fig_ax_pair,
+            num=num,
+            **kwargs)
+    fig_ax[1].set_ylim((-70, 5))
+    return fig_ax
+
 def syn(weight, output):
     return np.matmul(hermitian(weight), output).squeeze()
 
