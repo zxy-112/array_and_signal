@@ -47,7 +47,8 @@ def simulate_example():
         lfm_pw = 10e-6
         sample_points = 4096
         figsize = (16, 4)
-        fast_snap = 64
+        fast_snap = 32
+        plot_what = 'response'
 
         def make_lfm(m, n):
             zero_len = lfm_pw * m
@@ -93,6 +94,8 @@ def simulate_example():
 
         box_color = '#f85a40'
         line_color = '#037ef3'
+        interference_color = '#7552cc'
+        expect_color = '#00c16e'
         gs = gridspec.GridSpec(4, 4, None, 0.05, 0.05, 0.95, 0.95)
         fig_for_ani = plt.figure(figsize=(16, 8))
         fig = fig_for_ani
@@ -105,14 +108,23 @@ def simulate_example():
         ax5 = fig.add_subplot(gs[0, 3])
         ax6 = fig.add_subplot(gs[1, 3])
         ax7 = fig.add_subplot(gs[2, 3])
-        for ax in ax5, ax6, ax7:
+        for ax in ax5, ax6:
             ax.set_xlim((-0.4, 0.4))
             ax.set_ylim((0, 1))
         ax8 = fig.add_subplot(gs[3, 3])
-        # ax8.set_xlim((-0.4, 0.4))
-        ax8.set_xlim((-90, 90))
-        ax8.set_ylim((-50, 0))
-        ax8.axvline(coherent_theta, color='#7552cc')
+        if plot_what == 'response':
+            ax8.set_xlim((-90, 90))
+            ax8.set_ylim((-50, 0))
+            ax8.axvline(coherent_theta, color=interference_color)
+            ax8.axvline(expect_theta, color=expect_color)
+            ax7.set_xlim((-90, 90))
+            ax7.set_ylim((-50, 0))
+            ax7.axvline(coherent_theta, color=interference_color)
+            ax7.axvline(expect_theta, color=expect_color)
+        else:
+            ax8.set_xlim((-0.4, 0.4))
+            ax7.set_xlim((-0.4, 0.4))
+
         ((line5,), (line6,), (line7,), (line8,)) = ax5.plot([], [], color=line_color), ax6.plot([], [], color=line_color), ax7.plot([], [], color=line_color), ax8.plot([], [], color=line_color),
 
         ax1.sharex(ax2)
@@ -132,7 +144,7 @@ def simulate_example():
         ax4_left = ax4.axvline(1-fast_snap, color=box_color)
         ax4_right = ax4.axvline(0, color=box_color)
         x_data, y_data = [], []
-        ani_out_line, = ax4.plot([], y_data), color=line_color
+        ani_out_line, = ax4.plot(x_data, y_data, color=line_color)
 
         def ani_func(num):
             nonlocal y_max
@@ -161,11 +173,14 @@ def simulate_example():
             syn_out = syn(used_weight, used_out)
             line5.set_xdata(fftfreq(len(used_e))), line5.set_ydata(normalize(np.abs(fft(used_e))))
             line6.set_xdata(fftfreq(len(used_c))), line6.set_ydata(normalize(np.abs(fft(used_c))))
-            line7.set_xdata(fftfreq(len(used_single_way))), line7.set_ydata(normalize(np.abs(fft(used_single_way))))
-            response, thetas = ary.response_with(-90, 90, 1801, used_weight, rettheta=True)
-            response = value_to_decibel(np.abs(response))
-            # line8.set_xdata(fftfreq(len(syn_out))), line8.set_ydata(normalize(np.abs(fft(syn_out))))
-            line8.set_xdata(thetas), line8.set_ydata(response)
+            if plot_what == 'response':
+                response, thetas = ary.response_with(-90, 90, 1801, used_weight, rettheta=True)
+                response = value_to_decibel(np.abs(response))
+                line7.set_xdata(thetas), line7.set_ydata(np.angle(response))
+                line8.set_xdata(thetas), line8.set_ydata(response)
+            else:
+                line7.set_xdata(fftfreq(len(used_single_way))), line7.set_ydata(normalize(np.abs(fft(used_single_way))))
+                line8.set_xdata(fftfreq(len(syn_out))), line8.set_ydata(normalize(np.abs(fft(syn_out))))
             to_append = np.real(syn_out[-1])
             if to_append > y_max and num > fast_snap:
                 y_max = to_append

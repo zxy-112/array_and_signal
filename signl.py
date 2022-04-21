@@ -52,7 +52,7 @@ class Signal:
         """
         return self.amplitude * np.exp(1j * 2 * np.pi * self.fre_shift * t) * np.exp(1j * self.phase_shift)
 
-    def plot(self, from_to=(None, None), fig_ax_pair=(None, None)):
+    def plot(self, from_to=(None, None), fig_ax_pair=(None, None), **plt_kwargs):
         """
         绘制信号波形，某些信号需要重写以使图形美观
         """
@@ -62,7 +62,7 @@ class Signal:
             fig, ax = plt.subplots()
 
         begin, end = self.format(from_to)
-        ax.plot(self._signal.real[begin: end])
+        ax.plot(self._signal.real[begin: end], **plt_kwargs)
         ax.set_ylim((-1.2 * self.amplitude, 1.2 * self.amplitude))
         fig.show()
         return fig, ax
