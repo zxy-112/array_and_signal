@@ -5,6 +5,14 @@ import matplotlib.pyplot as plt
 
 pinv = np.linalg.pinv
 pinv_fast = lambda x: pinv(x, hermitian=True)
+fft = lambda x: np.fft.fftshift(np.fft.fft(x))
+fftfreq = lambda m: np.fft.fftshift(np.fft.fftfreq(m))
+
+def normalize(x):
+    if np.any(x):
+        return x / np.max(x)
+    else:
+        return x
 
 def value_to_decibel(vector):
     res = 20 * np.log10(vector / np.max(vector))
