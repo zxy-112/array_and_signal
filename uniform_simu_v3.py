@@ -59,9 +59,10 @@ def simulate_example():
             return signl.SignalWave2D.concatenate(expect_theta, *signal_seq)
 
         e_signal = make_lfm(3, 4)
-        c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=1e6)
+        c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=6e6)
         e_signal.sample(sample_points)
         c_signal.sample(sample_points)
+        print(len(e_signal.signal))
 
         fig_ax_pair = plt.subplots(figsize=figsize)
         e_signal.plot(fig_ax_pair=fig_ax_pair)
@@ -90,6 +91,8 @@ def simulate_example():
             fig_ax_pair[1].plot(np.real(output[k]))
             savefig(fig_ax_pair, '阵元{}信号.png'.format(k+1))
 
+        box_color = '#f85a40'
+        line_color = '#037ef3'
         gs = gridspec.GridSpec(4, 4, None, 0.05, 0.05, 0.95, 0.95)
         fig_for_ani = plt.figure(figsize=(16, 8))
         fig = fig_for_ani
@@ -109,17 +112,17 @@ def simulate_example():
         # ax8.set_xlim((-0.4, 0.4))
         ax8.set_xlim((-90, 90))
         ax8.set_ylim((-50, 0))
-        ((line5,), (line6,), (line7,), (line8,)) = ax5.plot([], []), ax6.plot([], []), ax7.plot([], []), ax8.plot([], []),
+        ax8.axvline(coherent_theta, color='#7552cc')
+        ((line5,), (line6,), (line7,), (line8,)) = ax5.plot([], [], color=line_color), ax6.plot([], [], color=line_color), ax7.plot([], [], color=line_color), ax8.plot([], [], color=line_color),
 
         ax1.sharex(ax2)
         ax2.sharex(ax3)
         ax3.sharex(ax4)
 
-        e_signal.plot(fig_ax_pair=(fig, ax1))
-        c_signal.plot(fig_ax_pair=(fig, ax2))
-        ax3.plot(np.real(output[0]))
+        e_signal.plot(fig_ax_pair=(fig, ax1), color=line_color)
+        c_signal.plot(fig_ax_pair=(fig, ax2), color=line_color)
+        ax3.plot(np.real(output[0]), color=line_color)
 
-        box_color = 'red'
         ax1_left = ax1.axvline(1-fast_snap, color=box_color)
         ax1_right = ax1.axvline(0, color=box_color)
         ax2_left = ax2.axvline(1-fast_snap, color=box_color)
@@ -129,7 +132,7 @@ def simulate_example():
         ax4_left = ax4.axvline(1-fast_snap, color=box_color)
         ax4_right = ax4.axvline(0, color=box_color)
         x_data, y_data = [], []
-        ani_out_line, = ax4.plot([], y_data)
+        ani_out_line, = ax4.plot([], y_data), color=line_color
 
         def ani_func(num):
             nonlocal y_max
@@ -174,8 +177,8 @@ def simulate_example():
             ani_out_line.set_ydata(y_data)
             ani_out_line.set_xdata(x_data)
 
-        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points-fast_snap+1, interval=2, save_count=sample_points)
-        plt.show()
+        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points-fast_snap+1, interval=2)
+        # plt.show()
         ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
 
     example1()
