@@ -60,7 +60,6 @@ def simulate_example():
 
         e_signal = make_lfm(3, 4)
         c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=1e6)
-        c_signal = make_lfm(3, 4)
         e_signal.sample(sample_points)
         c_signal.sample(sample_points)
 
@@ -89,7 +88,6 @@ def simulate_example():
         for k in range(16):
             fig_ax_pair = plt.subplots(figsize=figsize)
             fig_ax_pair[1].plot(np.real(output[k]))
-            # fig_ax_pair[0].show()
             savefig(fig_ax_pair, '阵元{}信号.png'.format(k+1))
 
         gs = gridspec.GridSpec(4, 4, None, 0.05, 0.05, 0.95, 0.95)
@@ -99,6 +97,8 @@ def simulate_example():
         ax2 = fig.add_subplot(gs[1, :3])
         ax3 = fig.add_subplot(gs[2, :3])
         ax4 = fig.add_subplot(gs[3, :3])
+        ax4.set_ylim((-1, 1))
+        y_max = ax4.get_ylim()[0]
         ax5 = fig.add_subplot(gs[0, 3])
         ax6 = fig.add_subplot(gs[1, 3])
         ax7 = fig.add_subplot(gs[2, 3])
@@ -106,8 +106,9 @@ def simulate_example():
             ax.set_xlim((-0.4, 0.4))
             ax.set_ylim((0, 1))
         ax8 = fig.add_subplot(gs[3, 3])
-        ax8.set_xlim((-0.4, 0.4))
-        ax8.set_ylim((0, 1))
+        # ax8.set_xlim((-0.4, 0.4))
+        ax8.set_xlim((-90, 90))
+        ax8.set_ylim((-50, 0))
         ((line5,), (line6,), (line7,), (line8,)) = ax5.plot([], []), ax6.plot([], []), ax7.plot([], []), ax8.plot([], []),
 
         ax1.sharex(ax2)
@@ -129,8 +130,6 @@ def simulate_example():
         ax4_right = ax4.axvline(0, color=box_color)
         x_data, y_data = [], []
         ani_out_line, = ax4.plot([], y_data)
-        ax4.set_ylim((-1, 1))
-        y_max = ax4.get_ylim()[0]
 
         def ani_func(num):
             nonlocal y_max
@@ -154,11 +153,16 @@ def simulate_example():
                 used_e = e_signal.signal[num-fast_snap+1: num+1]
                 used_c = c_signal.signal[num-fast_snap+1: num+1]
                 used_single_way = output[0][num-fast_snap+1: num+1]
-            syn_out = syn(mvdr(used_out, expect_theta, ary.steer_vector), used_out)
+            mvdr_weight = mvdr(used_out, expect_theta, ary.steer_vector)
+            used_weight = mvdr_weight
+            syn_out = syn(used_weight, used_out)
             line5.set_xdata(fftfreq(len(used_e))), line5.set_ydata(normalize(np.abs(fft(used_e))))
             line6.set_xdata(fftfreq(len(used_c))), line6.set_ydata(normalize(np.abs(fft(used_c))))
             line7.set_xdata(fftfreq(len(used_single_way))), line7.set_ydata(normalize(np.abs(fft(used_single_way))))
-            line8.set_xdata(fftfreq(len(syn_out))), line8.set_ydata(normalize(np.abs(fft(syn_out))))
+            response, thetas = ary.response_with(-90, 90, 1801, used_weight, rettheta=True)
+            response = value_to_decibel(np.abs(response))
+            # line8.set_xdata(fftfreq(len(syn_out))), line8.set_ydata(normalize(np.abs(fft(syn_out))))
+            line8.set_xdata(thetas), line8.set_ydata(response)
             to_append = np.real(syn_out[-1])
             if to_append > y_max and num > fast_snap:
                 y_max = to_append
@@ -170,8 +174,9 @@ def simulate_example():
             ani_out_line.set_ydata(y_data)
             ani_out_line.set_xdata(x_data)
 
-        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points-fast_snap+1, interval=2,)
-        ani.save('mvdr输入和输出.mp4', dpi=200)
+        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points-fast_snap+1, interval=2, save_count=sample_points)
+        plt.show()
+        ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
 
     example1()
 
