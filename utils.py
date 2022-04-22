@@ -111,6 +111,14 @@ def mcmv(output, expect_theta, coherent_theta, steer_func):
             )
     return mcmv_weight
 
+def exactly(expect_theta, snr, interference_theta, inr, sigma_power, steer_func):
+    a0 = steer_func(expect_theta)
+    cov_mat = sigma_power * np.eye(a0.size) + snr * a0 @ hermitian(a0)
+    for item_inr, theta in zip(inr, interference_theta):
+        a = steer_func(theta)
+        cov_mat = item_inr * a @ hermitian(a)
+    return np.linalg.pinv(cov_mat) * a0
+
 def ctmv(output, expect_theta, coherent_theta, steer_func, sigma_power, diagonal_load=0):
     cov_mat = calcu_cov(output)
     cov_mat_loaded = cov_mat + diagonal_load * np.eye(len(cov_mat))

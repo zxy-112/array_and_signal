@@ -47,20 +47,21 @@ def simulate_example():
         lfm_pw = 10e-6
         sample_points = 4096
         figsize = (16, 4)
-        fast_snap = 32
+        fast_snap = 256
         plot_what = 'response'
 
-        def make_lfm(m, n):
+        def make_lfm(m, n, nr):
             zero_len = lfm_pw * m
             signal_seq = []
             for _ in range(n):
                 signal_seq.append(signl.ZeroSignal(zero_len/4))
-                signal_seq.append(signl.Lfm(signal_length=lfm_pw, amplitude=decibel2val(snr)))
+                signal_seq.append(signl.Lfm(signal_length=lfm_pw, amplitude=decibel2val(nr)))
                 signal_seq.append(signl.ZeroSignal(zero_len/4*3))
             return signl.SignalWave2D.concatenate(expect_theta, *signal_seq)
 
-        e_signal = make_lfm(3, 4)
-        c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=6e6)
+        e_signal = make_lfm(3, 4, snr)
+        c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=1e6)
+        c_signal = make_lfm(1, 6, snr)
         e_signal.sample(sample_points)
         c_signal.sample(sample_points)
         print(len(e_signal.signal))
@@ -118,12 +119,14 @@ def simulate_example():
             ax8.axvline(coherent_theta, color=interference_color)
             ax8.axvline(expect_theta, color=expect_color)
             ax7.set_xlim((-90, 90))
-            ax7.set_ylim((-50, 0))
+            ax7.set_ylim((-np.pi, np.pi))
             ax7.axvline(coherent_theta, color=interference_color)
             ax7.axvline(expect_theta, color=expect_color)
         else:
             ax8.set_xlim((-0.4, 0.4))
+            ax8.set_ylim((0, 1))
             ax7.set_xlim((-0.4, 0.4))
+            ax7.set_ylim((0, 1))
 
         ((line5,), (line6,), (line7,), (line8,)) = ax5.plot([], [], color=line_color), ax6.plot([], [], color=line_color), ax7.plot([], [], color=line_color), ax8.plot([], [], color=line_color),
 
@@ -192,7 +195,7 @@ def simulate_example():
             ani_out_line.set_ydata(y_data)
             ani_out_line.set_xdata(x_data)
 
-        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points-fast_snap+1, interval=2)
+        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points, interval=2)
         # plt.show()
         ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
 
