@@ -68,7 +68,7 @@ def simulate_example():
         c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=1e6)
         c_signal = make_lfm(1, 8, snr)
         c_signal.signal_length = e_signal.signal_length
-        c_signal.theta = 20
+        c_signal.theta = coherent_theta
         e_signal.sample(sample_points)
         c_signal.sample(sample_points)
 

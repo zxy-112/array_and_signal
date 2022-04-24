@@ -303,7 +303,6 @@ class NoiseWave3D(GaussionNoise, Wave3D):
 
 class SignalWave2D(Signal, Wave2D):
 
-    # 需要补充说明文档，且没有好好写和测试
     def __init__(self, theta=0, signal_length=10e-6, amplitude=1, fre_shift=0, phase_shift=0, delay=0, signal_type='expect', new_expression=None):
         Wave2D.__init__(self, theta=theta)
         Signal.__init__(self,
@@ -317,7 +316,7 @@ class SignalWave2D(Signal, Wave2D):
 
     def expression(self, t):
         if self.new_expression is not None:
-            return self.new_expression(len(t))
+            return self.new_expression(t)
         else:
             return Signal.expression(self, t)
 
@@ -332,7 +331,8 @@ class SignalWave2D(Signal, Wave2D):
         ratio_seq = [item/signal_length for item in length_seq]
         amplitude = max([item.amplitude for item in signal_seq])
 
-        def new_expression(length_of_t):
+        def new_expression(t):
+            length_of_t = len(t)
             points_for_every = []
             for index, item in enumerate(ratio_seq):
                 if index == len(ratio_seq) - 1:
