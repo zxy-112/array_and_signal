@@ -113,11 +113,11 @@ def mcmv(output, expect_theta, coherent_theta, steer_func):
 
 def exactly(expect_theta, snr, interference_theta, inr, sigma_power, steer_func):
     a0 = steer_func(expect_theta)
-    cov_mat = sigma_power * np.eye(a0.size) + snr * a0 @ hermitian(a0)
+    cov_mat = sigma_power * np.eye(a0.size) + snr**2 * a0 @ hermitian(a0)
     for item_inr, theta in zip(inr, interference_theta):
         a = steer_func(theta)
-        cov_mat = item_inr * a @ hermitian(a)
-    return np.linalg.pinv(cov_mat) * a0
+        cov_mat += item_inr**2 * a @ hermitian(a)
+    return np.linalg.pinv(cov_mat) @ a0
 
 def ctmv(output, expect_theta, coherent_theta, steer_func, sigma_power, diagonal_load=0):
     cov_mat = calcu_cov(output)
@@ -219,6 +219,21 @@ def data_generate(data_iterable, save_path):
         index += 1
     with open(os.path.join(save_path, 'info.txt'), 'w') as f:
         json.dump(info_dic, f, indent=4)
+
+def eval_power(signal):
+    return np.sum(signal * hermitian(signal)) / signal.size
+
+def smooth(output, expect_theta, steer_func):
+    cov1 = calcu_cov(output[:-1, :])
+    cov2 = calcu_cov(output[1:, :])
+    cov = (cov1 + cov2 ) / 2
+    return np.linalg.pinv(cov) @ steer_func(expect_theta)[:-1, :]
+
+def output_noise_power(noise_power, weight):
+    res = 0
+    for item in weight.flatten():
+        res += item * np.conjugate(item)
+    return noise_power * res
 
 if __name__ == '__main__':
     test_data = ((1, 2, {'name': 'zxy', 'age': 22}) for _ in range(1))

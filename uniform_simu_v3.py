@@ -38,6 +38,11 @@ def savefig(fig_ax, name):
 
 def simulate_example():
 
+    box_color = '#f85a40'
+    line_color = '#037ef3'
+    interference_color = '#7552cc'
+    expect_color = '#00c16e'
+
     def example1():
         ary = aray_maker()
         coherent_theta = 20
@@ -61,10 +66,11 @@ def simulate_example():
 
         e_signal = make_lfm(3, 4, snr)
         c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=1e6)
-        c_signal = make_lfm(1, 6, snr)
+        c_signal = make_lfm(1, 8, snr)
+        c_signal.signal_length = e_signal.signal_length
+        c_signal.theta = 20
         e_signal.sample(sample_points)
         c_signal.sample(sample_points)
-        print(len(e_signal.signal))
 
         fig_ax_pair = plt.subplots(figsize=figsize)
         e_signal.plot(fig_ax_pair=fig_ax_pair)
@@ -93,10 +99,6 @@ def simulate_example():
             fig_ax_pair[1].plot(np.real(output[k]))
             savefig(fig_ax_pair, '阵元{}信号.png'.format(k+1))
 
-        box_color = '#f85a40'
-        line_color = '#037ef3'
-        interference_color = '#7552cc'
-        expect_color = '#00c16e'
         gs = gridspec.GridSpec(4, 4, None, 0.05, 0.05, 0.95, 0.95)
         fig_for_ani = plt.figure(figsize=(16, 8))
         fig = fig_for_ani
@@ -196,10 +198,10 @@ def simulate_example():
             ani_out_line.set_xdata(x_data)
 
         ani = animation.FuncAnimation(fig, ani_func, frames=sample_points, interval=2)
-        # plt.show()
-        ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
+        plt.show()
+        # ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
 
-    example1()
+    # example1()
 
     def example2():
         ele_num = 16
@@ -207,12 +209,23 @@ def simulate_example():
         incoherent_theta = (-30,)
         expect_theta = 0
         signals = list(signals_maker(coherent_theta=coherent_theta, incoherent_theta=incoherent_theta))
-        sample_points = ele_num ** 2
-        ary = aray_maker()
-        fig_ax = ary.response_plot(ary.steer_vector(expect_theta), linewidth=2)
-        savefig(fig_ax, 'response.png')
+        sample_points = 256
+        ary = aray_maker(ele_num)
         ary_for_plot = aray_maker(ele_num-1)
         ary_for_chi = aray_maker(ele_num-len(coherent_theta))
+        ary_for_eval_sinr = aray_maker(ele_num)
+        ary_for_eval_sinr.noise_power = 0
+        ary_for_eval_sinr.receive_signal(signals[0])
+        ary_for_eval_sinr.sample(sample_points)
+        e_signal = ary_for_eval_sinr.output
+        ary_for_eval_sinr.remove_all_signal()
+        ary_for_eval_sinr.receive_signal(signals[1])
+        ary_for_eval_sinr.sample(sample_points)
+        c_signal = ary_for_eval_sinr.output
+        ary_for_eval_sinr.remove_all_signal()
+        ary_for_eval_sinr.receive_signal(signals[2])
+        ary_for_eval_sinr.sample(sample_points)
+        i_signal = ary_for_eval_sinr.output
 
         for signal in signals:
             ary.receive_signal(signal)
@@ -221,12 +234,14 @@ def simulate_example():
         output = ary.output
 
         weight = ary.steer_vector(expect_theta)
-        adaptive_weight = mvdr(output, expect_theta, ary.steer_vector)
+        mvdr_weight = mvdr(output, expect_theta, ary.steer_vector)
         mcmv_weight = mcmv(output, expect_theta, coherent_theta, ary.steer_vector)
         ctmv_weight = ctmv(output, expect_theta, coherent_theta, ary.steer_vector, ary.noise_power)
         ctp_weight = ctp(output, expect_theta, coherent_theta, ary.steer_vector, ary.noise_power)
         duvall_weight, duvall_output = duvall(output, expect_theta, ary.steer_vector, True)
         yang_ho_chi_weight, yang_ho_chi_output = yang_ho_chi(output, len(coherent_theta), ary.steer_vector, retoutput=True)
+        smooth_weight = smooth(output, expect_theta, ary.steer_vector)
+        optimal_weight = exactly(expect_theta, signals[0].amplitude, (coherent_theta[0], incoherent_theta[0]), (item.amplitude for item in signals[1:]), ary.noise_power, ary.steer_vector)
 
         ##########################
         #######plot config########
@@ -248,28 +263,101 @@ def simulate_example():
         ##########################
         #######end config#########
         ##########################
-        methods = ['MVDR', 'MCMV', 'CTMV', 'CTP', 'Duvall', 'yang_ho_chi']
+        methods = ['MVDR', 'MCMV', 'CTMV', 'CTP', 'optimal', 'Duvall', 'smooth', 'yang_ho_chi']
         # 响应
         plt.rc('axes', prop_cycle=custom_cycler)
         fig_ax = plt.subplots()
-        weights = [adaptive_weight, mcmv_weight, ctmv_weight, ctp_weight]
+        weights = [mvdr_weight, mcmv_weight, ctmv_weight, ctp_weight, optimal_weight]
         for weight in weights:
             ary.response_plot(weight, fig_ax_pair=fig_ax)
         ary_for_plot.response_plot(duvall_weight, fig_ax_pair=fig_ax)
+        ary_for_plot.response_plot(smooth_weight, fig_ax)
         ary_for_chi.response_plot(yang_ho_chi_weight, fig_ax_pair=fig_ax)
         fig_ax[0].legend(all_lines[:len(methods)], methods)
         ary.plot_line(fig_ax)
         savefig(fig_ax, 'all_response.png')
 
         # 波束形成
-        def normalize(x):
-            return x / np.max(x)
+        # def normalize(x):
+        #     return x / np.max(x)
 
-        weights = [adaptive_weight, mcmv_weight, ctmv_weight, ctp_weight]
-        for item, name in zip(weights, methods):
-            my_plot(normalize(np.real(syn(item, output))), num=name)
-        my_plot(normalize(np.real(duvall_output)), num='duvall_based')
-        my_plot(normalize(np.real(yang_ho_chi_output)), num='yang_ho_chi')
+        # weights = [mvdr_weight, mcmv_weight, ctmv_weight, ctp_weight]
+        # for item, name in zip(weights, methods):
+        #     my_plot(normalize(np.real(syn(item, output))), num=name)
+        # my_plot(normalize(np.real(duvall_output)), num='duvall_based')
+        # my_plot(normalize(np.real(yang_ho_chi_output)), num='yang_ho_chi')
+
+        plt.rcdefaults()
+
+        ary.remove_all_signal()
+        ary.noise_power = 0
+        ary.receive_signal(signals[0])
+        e_output = syn(mvdr_weight, ary.output)
+        fig, (ax, ax2, ax3) = plt.subplots(1, 3, figsize=(12, 4), constrained_layout=True)
+        ax.plot(np.real(e_output), color=line_color)
+        ary.remove_all_signal()
+        ary.receive_signal(signals[1])
+        c_output = syn(mvdr_weight, ary.output)
+        ax.plot(np.real(c_output), color='#0ead69')
+        response, thetas = ary.response_with(-90, 90, 1801, mvdr_weight, True)
+        ax2.plot(thetas, value_to_decibel(np.abs(response)), color=line_color)
+        ax2.axvline(expect_theta, color=expect_color)
+        ax2.axvline(coherent_theta, color=interference_color)
+        ax3.plot(thetas, np.angle(response), color=line_color)
+        ax3.axvline(expect_theta, color=expect_color)
+        ax3.axvline(coherent_theta, color=interference_color)
+        savefig((fig, ax), 'mvdr_out.png')
+        fig, ax = plt.subplots()
+        signals[0].plot(fig_ax_pair=(fig, ax), color=line_color)
+        savefig((fig, ax), '期望信号.png')
+
+        fig, ax = plt.subplots()
+        signals[1].plot(fig_ax_pair=(fig, ax), color=line_color)
+        savefig((fig, ax), '干扰信号.png')
+
+        fig_for_ani, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 8))
+        optimal_weight = exactly(expect_theta, signals[0].amplitude, (coherent_theta[0], incoherent_theta[0]), (item.amplitude for item in signals[1:]), ary.noise_power, ary.steer_vector)
+        ary.response_plot(optimal_weight, (fig_for_ani, ax1), linewidth=1)
+        linea = ax1.lines[0]
+        ary.response_plot(optimal_weight, (fig_for_ani, ax2), linewidth=1)
+        lineb = ax2.lines[0]
+        # mycolor = line.get_c()
+        ary.response_plot(optimal_weight, (fig_for_ani, ax3), linewidth=1)
+        linec = ax3.lines[0]
+        ax1.set_xlim((-90, 90))
+        ax1.set_ylim((-60, 0))
+        ax2.set_xlim((-90, 90))
+        ax2.set_ylim((-60, 0))
+        ax3.set_xlim((-90, 90))
+        ax3.set_ylim((-60, 0))
+        ax4.set_xlim((0, sample_points))
+        x_data1, y_data1 = [], []
+        x_data2, y_data2 = [], []
+        x_data3, y_data3 = [], []
+        line1, = ax1.plot(x_data1, y_data1, color=box_color)
+        ax1.legend([linea, line1], ['optimal', 'duvall'])
+        line2, = ax2.plot(x_data2, y_data2, color=box_color)
+        ax2.legend([lineb, line2], ['optimal', 'duvall_based'])
+        line3, = ax3.plot(x_data3, y_data3, color=box_color)
+        ax3.legend([linec, line3], ['optimal', 'smooth'])
+        def ani_func(num):
+            used_snap = output[:, :num]
+            used_e_signal = e_signal[:, :num]
+            used_c_signal = c_signal[:, :num]
+            used_i_signal = i_signal[:, :num]
+            duvall_weight, duvall_output = duvall(used_snap, expect_theta, ary.steer_vector, True)
+            yang_ho_chi_weight, yang_ho_chi_output = yang_ho_chi(used_snap, len(coherent_theta), ary.steer_vector, retoutput=True)
+            smooth_weight = smooth(used_snap, expect_theta, ary.steer_vector)
+            y_data1, x_data1 = ary_for_plot.response_with(-90, 90, 1801, duvall_weight, True)
+            y_data2, x_data2 = ary_for_plot.response_with(-90, 90, 1801, yang_ho_chi_weight, True)
+            y_data3, x_data3 = ary_for_plot.response_with(-90, 90, 1801, smooth_weight, True)
+            # line.set(color=mycolor)
+            line1.set_xdata(x_data1), line1.set_ydata(value_to_decibel(np.abs(y_data1)))
+            line2.set_xdata(x_data2), line2.set_ydata(value_to_decibel(np.abs(y_data2)))
+            line3.set_xdata(x_data3), line3.set_ydata(value_to_decibel(np.abs(y_data3)))
+        ani = animation.FuncAnimation(fig_for_ani, ani_func, range(1, sample_points+1), None)
+        plt.show()
+    example2()
 
 def data_generator():
     ele_num = 16
