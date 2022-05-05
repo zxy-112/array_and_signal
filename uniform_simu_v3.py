@@ -1,6 +1,7 @@
 import os
 import random
 from collections import Iterable
+from itertools import chain
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
@@ -33,7 +34,7 @@ def aray_maker(ele_num=16):
     return ary
 
 def savefig(fig_ax, name):
-    fig_ax[0].savefig(name, dpi=600, transparent=True)
+    fig_ax[0].savefig(name, dpi=1200, transparent=True)
     plt.close(fig_ax[0])
 
 def simulate_example():
@@ -66,9 +67,14 @@ def simulate_example():
 
         e_signal = make_lfm(3, 4, snr)
         c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=1e6)
-        c_signal = make_lfm(1, 8, snr)
+        c_signal = make_lfm(3, 4, snr)
         c_signal.signal_length = e_signal.signal_length
         c_signal.theta = coherent_theta
+
+        c_signal = make_lfm(3, 4, snr)
+        c_signal.signal_length = e_signal.signal_length
+        c_signal.theta = -30
+
         e_signal.sample(sample_points)
         c_signal.sample(sample_points)
 
@@ -197,8 +203,8 @@ def simulate_example():
             ani_out_line.set_ydata(y_data)
             ani_out_line.set_xdata(x_data)
 
-        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points, interval=2)
-        plt.show()
+        # ani = animation.FuncAnimation(fig, ani_func, frames=sample_points, interval=2)
+        # plt.show()
         # ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
 
     # example1()
@@ -357,7 +363,176 @@ def simulate_example():
             line3.set_xdata(x_data3), line3.set_ydata(value_to_decibel(np.abs(y_data3)))
         ani = animation.FuncAnimation(fig_for_ani, ani_func, range(1, sample_points+1), None)
         plt.show()
-    example2()
+    # example2()
+
+    def example3():
+        plt.rcParams['lines.linewidth'] = 2
+        colors = ['#037ef3', '#f85a40', '#00c16e', '#7552cc', '#0cb9c1', '#f48924', '#ffc845', '#a51890']
+        plt.rcParams['axes.prop_cycle'] = cycler(color=colors)
+
+        ele_num = 16
+        expect_theta = 0
+        coherent_theta = 20
+        cnr = 10
+        snr = 0
+        expect = signl.LfmWave2D(expect_theta, amplitude=decibel2val(snr), signal_type='expect')
+        inter = signl.CosWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='interference', fre_shift=1e6)
+        inter = signl.CossWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='coherent_interference', fres=(-4e6, -2e6, 1e6, 2e6))
+        inter = signl.NoiseWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='interference')
+        inter = signl.LfmWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='coherent_interference')
+        inters_theta = (-10, -25, 10)
+        inters = []
+        for theta in inters_theta:
+            inters.append(signl.NoiseWave2D(theta, amplitude=decibel2val(10), signal_type='interference'))
+        extra_inter = False
+
+        ary = aray_maker(ele_num=ele_num)
+        ary.noise_reproducible = False
+        ary.receive_signal(expect)
+        ary.receive_signal(inter)
+        if extra_inter:
+            for inter_ in inters:
+                ary.receive_signal(inter_)
+        ary_15 = aray_maker(ele_num=ele_num-1)
+        ary.sample(1024)
+
+        weight_1 = 18/2
+        weight_2 = 6/5
+        fig, axs = plt.subplots(2, 5, figsize=(2*weight_1, 5*weight_2), gridspec_kw=dict(hspace=0.1), constrained_layout=True)
+        title_config = {'fontweight': 'bold'}
+
+        expect.plot(fig_ax_pair=(fig, axs[0, 0]))
+        axs[0, 0].set_title('expect signal', **title_config)
+        expect.fft_plot(fig_ax_pair=(fig, axs[1, 0]), color='C3')
+        axs[1, 0].set_title('spectrum of expect signal', **title_config)
+
+        inter.plot(fig_ax_pair=(fig, axs[0, 1]))
+        axs[0, 1].set_title('interference signal', **title_config)
+        inter.fft_plot(fig_ax_pair=(fig, axs[1, 1]), color='C3')
+        axs[1, 1].set_title('spectrum of interference', **title_config)
+
+        output = ary.output
+        axs[0, 2].plot(output[0].real)
+        axs[0, 2].set_title('received signal', **title_config)
+        axs[1, 2].plot(fftfreq(len(output[0])), normalize(np.abs(fft(output[0]))), color='C3')
+        axs[1, 2].set_title('spectrum of received signal', **title_config)
+
+        mvdr_weight = mvdr(output, expect_theta, ary.steer_vector)
+        duvall_weight, duvall_output = duvall(output, expect_theta, ary.steer_vector, True)
+        response, thetas = ary.response_with(-90, 90, 1801, mvdr_weight, True)
+        response, thetas = ary_15.response_with(-90, 90, 1801, duvall_weight, True)
+        axs[0, 4].plot(thetas, value_to_decibel(np.abs(response)))
+        axs[0, 4].set_title('amplitude response', **title_config)
+        axs[0, 4].set_xlabel('degree(\u00b0)')
+        axs[1, 4].plot(thetas, np.angle(response))
+        axs[1, 4].set_title('phase response', **title_config)
+        axs[1, 4].set_xlabel('degree(\u00b0)')
+
+        linestyle = (0, (5, 1))
+        for ax in (axs[0, 4], axs[1, 4]):
+            ax.axvline(coherent_theta, linestyle=linestyle, color='C1', linewidth=1, label='interference')
+            ax.axvline(expect_theta, linestyle=linestyle, color='C4', linewidth=1, label='expect')
+
+        syn_out = syn(mvdr_weight, output)
+        syn_out = duvall_output
+        axs[0, 3].plot(syn_out.real)
+        axs[0, 3].set_title('beamformer output', **title_config)
+        axs[1, 3].plot(fftfreq(len(syn_out)), normalize(np.abs(fft(syn_out))), color='C3')
+        axs[1, 3].set_title('spectrum of beamfromer output', **title_config)
+
+        for ax in axs[1, :4]:
+            ax.set_xlim((-0.1, 0.1))
+            ax.set_xlabel('$f$  (normalized)')
+
+        for ax in axs[0, :4]:
+            ax.set_xlabel('sample')
+
+        for item in axs:
+            for ax in item:
+                plt.setp(ax.get_xticklabels(), fontsize=8)
+                plt.setp(ax.get_yticklabels(), fontsize=8)
+
+        fig.show()
+        savefig((fig, axs), '非相干演示.svg')
+
+        fig, axs = plt.subplots(2, 4, figsize=(12, 6), constrained_layout=True)
+        expect.plot(fig_ax_pair=(fig, axs[0, 0]))
+        axs[0, 0].set_title('expect signal', **title_config)
+        expect.fft_plot(fig_ax_pair=(fig, axs[1, 0]), color='C3')
+        axs[1, 0].set_title('spectrum of expect signal', **title_config)
+
+        axs[0, 1].plot(output[0].real)
+        axs[0, 1].set_title('received signal', **title_config)
+        axs[1, 1].plot(fftfreq(len(output[0])), normalize(np.abs(fft(output[0]))), color='C3')
+        axs[1, 1].set_title('spectrum of received signal', **title_config)
+
+        axs[0, 2].plot(syn_out.real)
+        axs[0, 2].set_title('beamformer output', **title_config)
+        axs[1, 2].plot(fftfreq(len(syn_out)), normalize(np.abs(fft(syn_out))), color='C3')
+        axs[1, 2].set_title('spectrum of beamfromer output', **title_config)
+
+        for ax in axs[1, :3]:
+            ax.set_xlim((-0.1, 0.1))
+            ax.set_xlabel('$f$  (normalized)')
+
+        for ax in axs[0, :3]:
+            ax.set_xlabel('sample')
+
+        axs[0, 3].plot(thetas, value_to_decibel(np.abs(response)))
+        axs[0, 3].set_title('amplitude response', **title_config)
+        axs[0, 3].set_xlabel('degree(\u00b0)')
+        axs[1, 3].plot(thetas, np.angle(response))
+        axs[1, 3].set_title('phase response', **title_config)
+        axs[1, 3].set_xlabel('degree(\u00b0)')
+        linestyle = (0, (5, 1))
+        for ax in (axs[0, 3], axs[1, 3]):
+            ax.axvline(expect_theta, color='C4', linewidth=1, linestyle=linestyle)
+            for theta in chain((coherent_theta,), inters_theta):
+                ax.axvline(theta, color='C1', linewidth=1, linestyle=linestyle)
+
+        fig.show()
+        savefig((fig, axs), '多个干扰.svg')
+
+        fig, ax = plt.subplots()
+        mvdr_weight = mvdr(output, expect_theta, ary.steer_vector)
+        duvall_weight = duvall(output, expect_theta, ary.steer_vector)
+        smooth_weight = smooth(output, expect_theta, ary.steer_vector)
+        yang_ho_chi_weight = yang_ho_chi(output, 1, ary.steer_vector)
+
+        ary.response_plot(mvdr_weight, (fig, ax), color='C0', linestyle='-', label='MVDR')
+        ary_15.response_plot(duvall_weight, (fig, ax), color='C1', linestyle=(0, (5, 1)), label='proposed')
+        ary_15.response_plot(yang_ho_chi_weight, (fig, ax), color='C2', linestyle='dashed', label='method in [14]')
+        ary_15.response_plot(smooth_weight, (fig, ax), color='C3', linestyle='dashdot', label='spatial smooth')
+        ax.axvline(expect_theta, color='C4', linewidth=1, linestyle=(0, (5, 1)))
+        ax.axvline(coherent_theta, color='C5', linewidth=1, linestyle=(0, (5, 1)))
+        ax.legend()
+        fig.show()
+        savefig((fig, ax), '对比.svg')
+
+        plt.rcdefaults()
+    example3()
+
+    def example4():
+        expect = signl.LfmWave2D()
+        coherent_1 = signl.LfmWave2D(theta=-20)
+        coherent_2 = signl.LfmWave2D(theta=20)
+        coherent_3 = signl.LfmWave2D(theta=-30, amplitude=10)
+        aray = aray_maker()
+        aray_for_plot = aray_maker(15)
+        for signal in (expect, coherent_1, coherent_2):
+            aray.receive_signal(signal)
+        aray.sample(1024)
+        output = aray.output
+        duvall_weight, duvall_output = duvall(output, 0, aray.steer_vector, True)
+        fig, ax = plt.subplots()
+        ax.plot(np.real(duvall_output), linewidth=2)
+        fig.show()
+        fig, ax = aray_for_plot.response_plot(duvall_weight)
+        ax.axvline(-20, linestyle=':')
+        ax.axvline(20, linestyle=':')
+        ax.axvline(-30, linestyle=':')
+        fig.show()
+    # example4()
 
 def data_generator():
     ele_num = 16
@@ -433,12 +608,12 @@ def data_generator():
                     'cnr': nr,
                     'inr': nr
                     }
-            yield output, real_cov, info_dic
+            yield output, np.linalg.pinv(real_cov), info_dic
             ary.remove_all_signal()
 
 if __name__ == "__main__":
     simulate_example()
-    generate_flag = input('generate data?y/n\n')
-    if generate_flag == 'y':
-        data_generate(data_generator(), SAVE_PATH)
+    # generate_flag = input('generate data?y/n\n')
+    # if generate_flag == 'y':
+    #     data_generate(data_generator(), SAVE_PATH)
 

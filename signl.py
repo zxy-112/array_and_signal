@@ -67,7 +67,7 @@ class Signal:
         fig.show()
         return fig, ax
 
-    def fft_plot(self, from_to=(None, None), fig_ax_pair=(None, None)):
+    def fft_plot(self, from_to=(None, None), fig_ax_pair=(None, None), **plt_kwargs):
         assert self._signal is not None, '无信号无法绘图'
         fig, ax = fig_ax_pair
         if fig is None:
@@ -80,7 +80,7 @@ class Signal:
         interest_signal = self._signal[begin: end]
         res = fft(interest_signal)
         freq = fftfreq(res.size)
-        ax.plot(freq, normalize(np.abs(res)))
+        ax.plot(freq, normalize(np.abs(res)), **plt_kwargs)
         fig.show()
         return fig, ax
 
@@ -251,8 +251,8 @@ class GaussionNoise(Signal):
         amplitude = np.sqrt(power / 2)
         return amplitude * (np.random.randn(*t.shape) + 1j * np.random.randn(*t.shape))
 
-    def plot(self):
-        fig, ax = Signal.plot(self)
+    def plot(self, from_to=(None, None), fig_ax_pair=(None, None), **plt_kwargs):
+        fig, ax = Signal.plot(self, from_to, fig_ax_pair, **plt_kwargs)
         if ax is not None:
             max_value = np.max(np.abs(self.signal)) * 1.2
             ax.set_ylim([-max_value, max_value])
@@ -351,6 +351,32 @@ class SignalWave2D(Signal, Wave2D):
             new_expression=new_expression,
             signal_type=signal_type)
         return res
+
+class CossWave2D(Signal, Wave2D):
+    def __init__(self, theta=0, signal_length=10e-6, amplitude=1, fre_shift=0, phase_shift=0, delay=0, signal_type='expect', fres=(0,)):
+        Signal.__init__(
+                self,
+                signal_length=signal_length,
+                amplitude=amplitude,
+                fre_shift=fre_shift,
+                phase_shift=phase_shift,
+                delay=delay,
+                signal_type=signal_type
+                )
+        Wave2D.__init__(self, theta=theta)
+        self.fres = fres
+
+    def expression(self, t):
+        single_amplitude = 1 / np.sqrt(len(self.fres))
+        res = np.zeros(t.shape, dtype=np.complex128)
+        for fre in self.fres:
+            res += np.exp(1j * 2 * np.pi * fre * t)
+        return Signal.expression(self, t) * res * single_amplitude
+
+    def plot(self, from_to=(None, None), fig_ax_pair=(None, None), **plt_kwargs):
+        fig, ax = Signal.plot(self, from_to, fig_ax_pair, **plt_kwargs)
+        ax.autoscale(True)
+        return fig, ax
 
 class NoSampleError(BaseException):
     pass

@@ -180,9 +180,9 @@ def ctp(output, expect_theta, coherent_theta, steer_func, sigma_power):
 
 def duvall(output, expect_theta, steer_func, retoutput=False):
     steer_vector = steer_func(expect_theta)
-    output = np.multiply(output, np.conjugate(steer_vector))
-    delta = output[:-1, :] - output[1:, :]
-    weight = mvdr(delta, 0, lambda x: steer_func(x)[:-1, :])
+    output_2 = np.conjugate(steer_vector[1][0]) * output
+    delta = output[:-1, :] - output_2[1:, :]
+    weight = mvdr(delta, expect_theta, lambda x: steer_func(x)[:-1, :])
     if not retoutput:
         return weight
     else:
