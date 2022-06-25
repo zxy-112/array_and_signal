@@ -20,6 +20,7 @@ noise_power = aray.UniformLineArray.noise_power
 decibel2val = lambda x: np.sqrt(np.power(10, x / 10) * noise_power)
 
 def signals_maker(expect_theta=0, coherent_theta=(20,), incoherent_theta=(-30,), snr=0, cnr=(10,), inr=(10,)):
+    # signal generator, yield expect signal, coherent interference, sinsoid respectively.
     yield signl.LfmWave2D(theta=expect_theta, amplitude=decibel2val(snr))
 
     for theta, ratio in zip(coherent_theta, cnr):
@@ -28,6 +29,9 @@ def signals_maker(expect_theta=0, coherent_theta=(20,), incoherent_theta=(-30,),
         yield signl.CosWave2D(theta=theta, signal_type='interference', amplitude=decibel2val(ratio))
 
 def aray_maker(ele_num=16):
+    """
+    return uniform array with ele_num elements.
+    """
     ary = aray.UniformLineArray()
     for _ in range(ele_num):
         ary.add_element(aray.Element())
@@ -39,13 +43,14 @@ def savefig(fig_ax, name):
 
 def simulate_example():
 
-    box_color = '#f85a40'
-    line_color = '#037ef3'
-    interference_color = '#7552cc'
-    expect_color = '#00c16e'
+    box_color = '#f85a40'  # color of box that contain snapshots.
+    line_color = '#037ef3'  # color of signal waveform.
+    interference_color = '#7552cc'  # color of interference theta.
+    expect_color = '#00c16e'  # color of expect theta.
 
     def example1():
-        ary = aray_maker()
+        # example that make animation of beamform.
+        ary = aray_maker(ele_num=16)
         coherent_theta = 20
         cnr = 10
         expect_theta = 0
@@ -66,14 +71,9 @@ def simulate_example():
             return signl.SignalWave2D.concatenate(expect_theta, *signal_seq)
 
         e_signal = make_lfm(3, 4, snr)
-        c_signal = signl.CosWave2D(theta=coherent_theta, signal_length=e_signal.signal_length, amplitude=decibel2val(cnr), signal_type='coherent_interference', fre_shift=1e6)
         c_signal = make_lfm(3, 4, snr)
         c_signal.signal_length = e_signal.signal_length
         c_signal.theta = coherent_theta
-
-        c_signal = make_lfm(3, 4, snr)
-        c_signal.signal_length = e_signal.signal_length
-        c_signal.theta = -30
 
         e_signal.sample(sample_points)
         c_signal.sample(sample_points)
@@ -83,16 +83,8 @@ def simulate_example():
         savefig(fig_ax_pair, '期望信号.png')
 
         fig_ax_pair = plt.subplots(figsize=figsize)
-        e_signal.fft_plot(fig_ax_pair=fig_ax_pair)
-        savefig(fig_ax_pair, '期望信号频谱.png')
-
-        fig_ax_pair = plt.subplots(figsize=figsize)
         c_signal.plot(fig_ax_pair=fig_ax_pair)
         savefig(fig_ax_pair, '干扰信号.png')
-
-        fig_ax_pair = plt.subplots(figsize=figsize)
-        c_signal.fft_plot(fig_ax_pair=fig_ax_pair)
-        savefig(fig_ax_pair, '干扰信号频谱.png')
 
         ary.receive_signal(c_signal)
         ary.receive_signal(e_signal)
@@ -100,10 +92,10 @@ def simulate_example():
 
         output = ary.output
 
-        for k in range(16):
-            fig_ax_pair = plt.subplots(figsize=figsize)
-            fig_ax_pair[1].plot(np.real(output[k]))
-            savefig(fig_ax_pair, '阵元{}信号.png'.format(k+1))
+        # for k in range(16):
+        #     fig_ax_pair = plt.subplots(figsize=figsize)
+        #     fig_ax_pair[1].plot(np.real(output[k]))
+        #     savefig(fig_ax_pair, '阵元{}信号.png'.format(k+1))
 
         gs = gridspec.GridSpec(4, 4, None, 0.05, 0.05, 0.95, 0.95)
         fig_for_ani = plt.figure(figsize=(16, 8))
@@ -112,11 +104,11 @@ def simulate_example():
         ax2 = fig.add_subplot(gs[1, :3])
         ax3 = fig.add_subplot(gs[2, :3])
         ax4 = fig.add_subplot(gs[3, :3])
-        ax4.set_ylim((-1, 1))
-        y_max = ax4.get_ylim()[0]
         ax5 = fig.add_subplot(gs[0, 3])
         ax6 = fig.add_subplot(gs[1, 3])
         ax7 = fig.add_subplot(gs[2, 3])
+        ax4.set_ylim((-1, 1))
+        y_max = ax4.get_ylim()[0]
         for ax in ax5, ax6:
             ax.set_xlim((-0.4, 0.4))
             ax.set_ylim((0, 1))
@@ -203,13 +195,12 @@ def simulate_example():
             ani_out_line.set_ydata(y_data)
             ani_out_line.set_xdata(x_data)
 
-        # ani = animation.FuncAnimation(fig, ani_func, frames=sample_points, interval=2)
-        # plt.show()
+        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points, interval=2)
+        plt.show()
         # ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
 
-    # example1()
-
     def example2():
+
         ele_num = 16
         coherent_theta = (20,)
         incoherent_theta = (-30,)
@@ -219,19 +210,6 @@ def simulate_example():
         ary = aray_maker(ele_num)
         ary_for_plot = aray_maker(ele_num-1)
         ary_for_chi = aray_maker(ele_num-len(coherent_theta))
-        ary_for_eval_sinr = aray_maker(ele_num)
-        ary_for_eval_sinr.noise_power = 0
-        ary_for_eval_sinr.receive_signal(signals[0])
-        ary_for_eval_sinr.sample(sample_points)
-        e_signal = ary_for_eval_sinr.output
-        ary_for_eval_sinr.remove_all_signal()
-        ary_for_eval_sinr.receive_signal(signals[1])
-        ary_for_eval_sinr.sample(sample_points)
-        c_signal = ary_for_eval_sinr.output
-        ary_for_eval_sinr.remove_all_signal()
-        ary_for_eval_sinr.receive_signal(signals[2])
-        ary_for_eval_sinr.sample(sample_points)
-        i_signal = ary_for_eval_sinr.output
 
         for signal in signals:
             ary.receive_signal(signal)
@@ -266,12 +244,12 @@ def simulate_example():
                          cycler(lw=lw) +
                          cycler(linestyle=linestyle))
         all_lines = [mlines.Line2D([], [], **config) for config in custom_cycler]
+        plt.rc('axes', prop_cycle=custom_cycler)
         ##########################
         #######end config#########
         ##########################
         methods = ['MVDR', 'MCMV', 'CTMV', 'CTP', 'optimal', 'Duvall', 'smooth', 'yang_ho_chi']
         # 响应
-        plt.rc('axes', prop_cycle=custom_cycler)
         fig_ax = plt.subplots()
         weights = [mvdr_weight, mcmv_weight, ctmv_weight, ctp_weight, optimal_weight]
         for weight in weights:
@@ -313,13 +291,6 @@ def simulate_example():
         ax3.axvline(expect_theta, color=expect_color)
         ax3.axvline(coherent_theta, color=interference_color)
         savefig((fig, ax), 'mvdr_out.png')
-        fig, ax = plt.subplots()
-        signals[0].plot(fig_ax_pair=(fig, ax), color=line_color)
-        savefig((fig, ax), '期望信号.png')
-
-        fig, ax = plt.subplots()
-        signals[1].plot(fig_ax_pair=(fig, ax), color=line_color)
-        savefig((fig, ax), '干扰信号.png')
 
         fig_for_ani, ((ax1, ax2), (ax3, ax4)) = plt.subplots(2, 2, figsize=(8, 8))
         optimal_weight = exactly(expect_theta, signals[0].amplitude, (coherent_theta[0], incoherent_theta[0]), (item.amplitude for item in signals[1:]), ary.noise_power, ary.steer_vector)
@@ -348,9 +319,6 @@ def simulate_example():
         ax3.legend([linec, line3], ['optimal', 'smooth'])
         def ani_func(num):
             used_snap = output[:, :num]
-            used_e_signal = e_signal[:, :num]
-            used_c_signal = c_signal[:, :num]
-            used_i_signal = i_signal[:, :num]
             duvall_weight, duvall_output = duvall(used_snap, expect_theta, ary.steer_vector, True)
             yang_ho_chi_weight, yang_ho_chi_output = yang_ho_chi(used_snap, len(coherent_theta), ary.steer_vector, retoutput=True)
             smooth_weight = smooth(used_snap, expect_theta, ary.steer_vector)
@@ -363,16 +331,15 @@ def simulate_example():
             line3.set_xdata(x_data3), line3.set_ydata(value_to_decibel(np.abs(y_data3)))
         ani = animation.FuncAnimation(fig_for_ani, ani_func, range(1, sample_points+1), None)
         plt.show()
-    # example2()
 
-    def example3():
+    def example3(interference="lfm"):
         plt.rcParams['lines.linewidth'] = 2
         colors = ['#037ef3', '#f85a40', '#00c16e', '#7552cc', '#0cb9c1', '#f48924', '#ffc845', '#a51890']
         plt.rcParams['axes.prop_cycle'] = cycler(color=colors)
 
         ele_num = 16
-        expect_theta = 0
-        coherent_theta = 20
+        expect_theta = 10
+        coherent_theta = 30
         cnr = 10
         snr = 0
         expect = signl.LfmWave2D(expect_theta, amplitude=decibel2val(snr), signal_type='expect')
@@ -380,7 +347,11 @@ def simulate_example():
         inter = signl.CossWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='coherent_interference', fres=(-4e6, -2e6, 1e6, 2e6))
         inter = signl.NoiseWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='interference')
         inter = signl.LfmWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='coherent_interference')
-        inters_theta = (-10, -25, 10)
+        if interference == "lfm":
+            inter = signl.LfmWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='coherent_interference')
+        else:
+            inter = signl.NoiseWave2D(coherent_theta, amplitude=decibel2val(cnr), signal_type='interference')
+        inters_theta = (-10, -25, 20)
         inters = []
         for theta in inters_theta:
             inters.append(signl.NoiseWave2D(theta, amplitude=decibel2val(10), signal_type='interference'))
@@ -428,10 +399,38 @@ def simulate_example():
         axs[1, 4].set_title('phase response', **title_config)
         axs[1, 4].set_xlabel('degree(\u00b0)')
 
+        plt.rcParams['axes.prop_cycle'] = cycler(color=colors)
+        linestyle = (0, (5, 1))
+        if interference == "lfm":
+            response, thetas = ary.response_with(-90, 90, 1801, mvdr_weight, True)
+            ax_special[0, 0].plot(thetas, value_to_decibel(np.abs(response)), color='#037ef3')
+            ax_special[0, 0].set_title('amplitude response', **title_config)
+            ax_special[0, 0].set_xlabel('degree(\u00b0)')
+            ax_special[0, 1].plot(thetas, np.angle(response), color='#037ef3')
+            ax_special[0, 1].set_title('phase response', **title_config)
+            ax_special[0, 1].set_xlabel('degree(\u00b0)')
+        else:
+            response, thetas = ary_15.response_with(-90, 90, 1801, duvall_weight, True)
+            ax_special[1, 0].plot(thetas, value_to_decibel(np.abs(response)), color='#037ef3')
+            ax_special[1, 0].set_title('amplitude response', **title_config)
+            ax_special[1, 0].set_xlabel('degree(\u00b0)')
+            ax_special[1, 1].plot(thetas, np.angle(response), color='#037ef3')
+            ax_special[1, 1].set_title('phase response', **title_config)
+            ax_special[1, 1].set_xlabel('degree(\u00b0)')
+
         linestyle = (0, (5, 1))
         for ax in (axs[0, 4], axs[1, 4]):
-            ax.axvline(coherent_theta, linestyle=linestyle, color='C1', linewidth=1, label='interference')
-            ax.axvline(expect_theta, linestyle=linestyle, color='C4', linewidth=1, label='expect')
+            ax.axvline(coherent_theta, color='C1', linestyle=linestyle, linewidth=1, label='interference')
+            ax.axvline(expect_theta, color='C4', linestyle=linestyle, linewidth=1, label='expect')
+
+        if interference == "lfm":
+            for ax in ax_special[:, 0]:
+                ax.axvline(coherent_theta, linestyle=linestyle, linewidth=1, label='interference', color='#f85a40')
+                ax.axvline(expect_theta, linestyle=linestyle, linewidth=1, label='expect', color= '#00c16e')
+        else:
+            for ax in ax_special[:, 1]:
+                ax.axvline(coherent_theta, linestyle=linestyle, linewidth=1, label='interference', color='#f85a40')
+                ax.axvline(expect_theta, linestyle=linestyle, linewidth=1, label='expect', color= '#00c16e')
 
         syn_out = syn(mvdr_weight, output)
         syn_out = duvall_output
@@ -501,16 +500,28 @@ def simulate_example():
 
         ary.response_plot(mvdr_weight, (fig, ax), color='C0', linestyle='-', label='MVDR')
         ary_15.response_plot(duvall_weight, (fig, ax), color='C1', linestyle=(0, (5, 1)), label='proposed')
-        ary_15.response_plot(yang_ho_chi_weight, (fig, ax), color='C2', linestyle='dashed', label='method in [14]')
         ary_15.response_plot(smooth_weight, (fig, ax), color='C3', linestyle='dashdot', label='spatial smooth')
         ax.axvline(expect_theta, color='C4', linewidth=1, linestyle=(0, (5, 1)))
         ax.axvline(coherent_theta, color='C5', linewidth=1, linestyle=(0, (5, 1)))
+        for item in inters_theta:
+            ax.axvline(item, color='C5', linewidth=1, linestyle=(0, (5, 1)))
         ax.legend()
         fig.show()
-        savefig((fig, ax), '对比.svg')
+        savefig((fig, ax), '对比.png')
+        # mvdr_out = syn(mvdr_weight, output)
+        # fig, ax = plt.subplots()
+        # ax.plot(np.real(mvdr_out))
+        # savefig((fig, ax), 'mvdr_out.png')
+        # fig, ax = plt.subplots()
+        # duvall_output = syn(duvall_weight, output[:-1, :])
+        # ax.plot(np.real(duvall_output))
+        # savefig((fig, ax), 'duvall_out.png')
+        # fig, ax = plt.subplots()
+        # smooth_output = syn(smooth_weight, output[:-1, :])
+        # ax.plot(np.real(smooth_output))
+        # savefig((fig, ax), 'smooth_out.png')
 
         plt.rcdefaults()
-    example3()
 
     def example4():
         expect = signl.LfmWave2D()
@@ -532,9 +543,22 @@ def simulate_example():
         ax.axvline(20, linestyle=':')
         ax.axvline(-30, linestyle=':')
         fig.show()
+
+    # example1()  # animation of beamform.
+    # example2()
+    colors = ['#037ef3', '#f85a40', '#00c16e', '#7552cc', '#0cb9c1', '#f48924', '#ffc845', '#a51890']
+    plt.rcParams['axes.prop_cycle'] = cycler(color=colors)
+    plt.rcParams['lines.linewidth'] = 2
+    fig_special, ax_special = plt.subplots(2, 2, figsize=(8, 8), constrained_layout=False)
+    example3("lfm")
+    example3("lll")
+    savefig((fig_special, ax_special), "compare.svg")
     # example4()
 
 def data_generator():
+    """
+    data_generator for data generate function.
+    """
     ele_num = 16
     cnr_num = 1
     inr_num = 1
