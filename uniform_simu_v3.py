@@ -2,6 +2,7 @@ import os
 import random
 from collections import Iterable
 from itertools import chain
+from copy import deepcopy
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.lines as mlines
@@ -51,12 +52,12 @@ def simulate_example():
     def example1():
         # example that make animation of beamform.
         ary = aray_maker(ele_num=16)
-        coherent_theta = 20
+        coherent_theta = 30
         cnr = 10
-        expect_theta = 0
-        snr = 0
+        expect_theta = 10
+        snr = 10
         lfm_pw = 10e-6
-        sample_points = 4096
+        sample_points = 4000
         figsize = (16, 4)
         fast_snap = 256
         plot_what = 'response'
@@ -70,24 +71,18 @@ def simulate_example():
                 signal_seq.append(signl.ZeroSignal(zero_len/4*3))
             return signl.SignalWave2D.concatenate(expect_theta, *signal_seq)
 
-        e_signal = make_lfm(3, 4, snr)
-        c_signal = make_lfm(3, 4, snr)
-        c_signal.signal_length = e_signal.signal_length
+        e_signal = make_lfm(3, 1, snr)
+        e_signal.theta = expect_theta
+        e_signal.amplitude = decibel2val(snr)
+        c_signal = deepcopy(e_signal)
         c_signal.theta = coherent_theta
+        c_signal.amplitude = decibel2val(cnr)
 
         e_signal.sample(sample_points)
         c_signal.sample(sample_points)
 
-        fig_ax_pair = plt.subplots(figsize=figsize)
-        e_signal.plot(fig_ax_pair=fig_ax_pair)
-        savefig(fig_ax_pair, '期望信号.png')
-
-        fig_ax_pair = plt.subplots(figsize=figsize)
-        c_signal.plot(fig_ax_pair=fig_ax_pair)
-        savefig(fig_ax_pair, '干扰信号.png')
-
-        ary.receive_signal(c_signal)
         ary.receive_signal(e_signal)
+        ary.receive_signal(c_signal)
         ary.sample(sample_points)
 
         output = ary.output
@@ -195,9 +190,56 @@ def simulate_example():
             ani_out_line.set_ydata(y_data)
             ani_out_line.set_xdata(x_data)
 
-        ani = animation.FuncAnimation(fig, ani_func, frames=sample_points, interval=2)
-        plt.show()
+        # ani = animation.FuncAnimation(fig, ani_func, frames=sample_points, interval=2)
+        # plt.show()
         # ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
+
+        aray_16 = ary
+        aray_15 = aray_maker(15)
+        aray_8 = aray_maker(8)
+
+        color=['#037ef3', '#f85a40', '#00c16e', '#7552cc', '#0cb9c1', '#f48924', '#ffc845', '#52565e']
+        fig, ax = plt.subplots(figsize=figsize)
+        e_signal.plot(fig_ax_pair=(fig, ax), color=color[0])
+        savefig((fig, ax), "qiwang.svg")
+        mvdr_weight = mvdr(output, expect_theta, aray_16.steer_vector)
+        mvdr_out = syn(mvdr_weight, output)
+        _, duvall_based_out = yang_ho_chi(output, 1, aray_16.steer_vector, expect_theta, True)
+        smooth_weight = smooth(output, expect_theta, aray_16.steer_vector)
+        smooth_out = syn(smooth_weight, output[:15, :])
+        smooth8_weight =smooth2(output, expect_theta, 8, aray_16.steer_vector)
+        smooth8_out = syn(smooth8_weight, output[:8, :])
+        proposed_weight = duvall(output, expect_theta, aray_16.steer_vector, False)
+        proposed_out = syn(proposed_weight, output[:15, :])
+        real_normalize = lambda x: np.real(x) / np.max(np.real(x))
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.plot(real_normalize(mvdr_out), color=color[0])
+        savefig((fig, ax), "mvdrout.svg")
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.plot(real_normalize(smooth_out), color=color[0])
+        savefig((fig, ax), "smoothout.svg")
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.plot(real_normalize(smooth8_out), color=color[0])
+        savefig((fig, ax), "smooth8out.svg")
+        fig, ax = plt.subplots(figsize=figsize)
+        ax.plot(real_normalize(proposed_out), color=color[0])
+        savefig((fig, ax), "proposedout.svg")
+
+        fig, ax = plt.subplots(figsize=(6, 4))
+        linestyle = [
+                (0, ()),
+                (0, (5, 1, 1, 1)),
+                (0, (3, 1, 1, 1)),
+                (0, (3, 1, 1, 1, 1, 1))
+                ]
+        aray_16.response_plot(mvdr_weight, (fig, ax), color=color[0], label="MVDR", linestyle=linestyle[0], linewidth=2)
+        aray_15.response_plot(smooth_weight, (fig, ax), color=color[1], label="spatial smooth with 2 subarrays", linestyle="dashdot", linewidth=2)
+        aray_8.response_plot(smooth8_weight, (fig, ax), color=color[2], label="spatial smooth with 8 subarrays", linestyle=linestyle[1], linewidth=2)
+        aray_15.response_plot(proposed_weight, (fig, ax), color=color[3], label="propsed", linestyle=(0, (5, 1)), linewidth=2)
+        ax.axvline(expect_theta, linestyle=(0, (5, 1)), linewidth=0.5, color="black")
+        ax.axvline(coherent_theta, linestyle=(0, (5, 1)), linewidth=0.5, color="black")
+        fig.legend(loc=2)
+        savefig((fig, ax), "experiment compare.svg")
 
     def example2():
 
@@ -338,8 +380,8 @@ def simulate_example():
         plt.rcParams['axes.prop_cycle'] = cycler(color=colors)
 
         ele_num = 16
-        expect_theta = 10
-        coherent_theta = 30
+        expect_theta = 0
+        coherent_theta = 20
         cnr = 10
         snr = 0
         expect = signl.LfmWave2D(expect_theta, amplitude=decibel2val(snr), signal_type='expect')
@@ -431,6 +473,20 @@ def simulate_example():
             for ax in ax_special[:, 1]:
                 ax.axvline(coherent_theta, linestyle=linestyle, linewidth=1, label='interference', color='#f85a40')
                 ax.axvline(expect_theta, linestyle=linestyle, linewidth=1, label='expect', color= '#00c16e')
+
+        fig__, ax__ = plt.subplots(1, 2, figsize=(8, 4))
+        response, thetas = ary.response_with(-90, 90, 1801, mvdr_weight, True)
+        ax__[0].plot(thetas, value_to_decibel(np.abs(response)), color='#037ef3')
+        ax__[0].set_title('amplitude response', **title_config)
+        ax__[0].set_xlabel('degree(\u00b0)')
+        ax__[1].plot(thetas, np.angle(response), color='#037ef3')
+        ax__[1].set_title('phase response', **title_config)
+        ax__[1].set_xlabel('degree(\u00b0)')
+        ax__[0].axvline(coherent_theta, linestyle=linestyle, linewidth=1, label='interference', color='#f85a40')
+        ax__[0].axvline(expect_theta, linestyle=linestyle, linewidth=1, label='expect', color= '#00c16e')
+        ax__[1].axvline(coherent_theta, linestyle=linestyle, linewidth=1, label='interference', color='#f85a40')
+        ax__[1].axvline(expect_theta, linestyle=linestyle, linewidth=1, label='expect', color= '#00c16e')
+        savefig((fig__, ax__), "下半边.svg")
 
         syn_out = syn(mvdr_weight, output)
         syn_out = duvall_output
@@ -544,16 +600,260 @@ def simulate_example():
         ax.axvline(-30, linestyle=':')
         fig.show()
 
-    # example1()  # animation of beamform.
+    def example5():
+        """
+        SINR simulation, mvdr, duvall based, proposed, smooth
+        """
+        def sinr(weight, only_noise, only_desired, only_interference):
+            cal_pow = lambda x: np.abs(np.sum(x * np.conjugate(x))) / x.size
+            desired = np.squeeze(np.conjugate(weight.T) @ only_desired)
+            noise = np.squeeze(np.conjugate(weight.T) @ only_noise)
+            interference = np.squeeze(np.conjugate(weight.T) @ only_interference)
+            real_value = cal_pow(desired) / (cal_pow(noise) + cal_pow(interference))
+            return 10 * np.log10(real_value)
+
+        expect_theta = 0
+        interference_theta = 20
+        sample_points = 1024
+        aray_16 = aray_maker(16)
+        aray_16.noise_reproducible = False
+
+        coherent_interference = signl.LfmWave2D(theta=interference_theta)
+
+        SNR = np.linspace(-20, 10, 100)
+        mvdr_cum = np.zeros(SNR.shape)
+        duvall_based_cum = np.zeros(SNR.shape)
+        proposed_cum = np.zeros(SNR.shape)
+        smooth_cum = np.zeros(SNR.shape)
+        smooth8_cum = np.zeros(SNR.shape)
+
+        for _ in range(1):
+
+            SINR_mvdr = []
+            SINR_duvall_based = []
+            SINR_proposed = []
+            SINR_smooth = []
+            SINR_smooth8 = []
+
+            for snr, index in zip(SNR, range(SNR.size)):
+
+                desired_signal = signl.LfmWave2D(amplitude=decibel2val(snr), theta=expect_theta)
+                ###
+                aray_16.remove_all_signal()
+                aray_16.noise_power = 1
+                aray_16.receive_signal(desired_signal)
+                aray_16.receive_signal(coherent_interference)
+                aray_16.sample(sample_points)
+                output = aray_16.output
+                aray_16.remove_all_signal()
+                aray_16.sample(sample_points)
+                only_noise_output = aray_16.output
+                aray_16.noise_power = 0
+                aray_16.receive_signal(desired_signal)
+                aray_16.sample(sample_points)
+                only_desired_output = aray_16.output
+                aray_16.remove_all_signal()
+                aray_16.receive_signal(coherent_interference)
+                aray_16.sample(sample_points)
+                only_interference_output = aray_16.output
+                ###
+                mvdr_weight = mvdr(output, expect_theta, aray_16.steer_vector)
+                yang_ho_chi_weight = yang_ho_chi(output, 1, aray_16.steer_vector, expect_theta)
+                smooth_weight = smooth(output, expect_theta, aray_16.steer_vector)
+                proposed_weight = duvall(output, expect_theta, aray_16.steer_vector)
+                smooth8_weight = smooth2(output, expect_theta, 8, aray_16.steer_vector)
+                ###
+                mvdr_sinr = sinr(mvdr_weight, only_noise_output, only_desired_output, only_interference_output)
+                yang_ho_chi_sinr = sinr(yang_ho_chi_weight, only_noise_output[:15, :], only_desired_output[:15, :], only_interference_output[:15, :])
+                smooth_sinr = sinr(smooth_weight, only_noise_output[:15, :], only_desired_output[:15, :], only_interference_output[:15, :])
+                proposed_sinr = sinr(proposed_weight, only_noise_output[:15, :], only_desired_output[:15, :], only_interference_output[:15, :])
+                smooth8_sinr = sinr(smooth8_weight, only_noise_output[:8, :], only_desired_output[:8, :], only_interference_output[:8, :])
+                ###
+                SINR_mvdr.append(mvdr_sinr)
+                SINR_duvall_based.append(yang_ho_chi_sinr)
+                SINR_proposed.append(proposed_sinr)
+                SINR_smooth.append(smooth_sinr)
+                SINR_smooth8.append(smooth8_sinr)
+            mvdr_cum += np.array(SINR_mvdr)
+            duvall_based_cum += np.array(SINR_duvall_based)
+            proposed_cum += np.array(SINR_proposed)
+            smooth_cum += np.array(SINR_smooth)
+            smooth8_cum += np.array(SINR_smooth8)
+        SINR_mvdr = mvdr_cum / 1
+        SINR_duvall_based = duvall_based_cum / 1
+        SINR_proposed = proposed_cum / 1
+        SINR_duvall_based = duvall_based_cum / 1
+        SINR_smooth8 = smooth8_cum / 1
+
+        fig, ax = plt.subplots()
+        colors = ['#037ef3', '#f85a40', '#00c16e', '#7552cc', '#0cb9c1', '#f48924', '#ffc845', '#a51890']
+        linestyle = [
+                (0, ()),
+                (0, (5, 1, 1, 1)),
+                (0, (3, 1, 1, 1)),
+                (0, (3, 1, 1, 1, 1, 1))
+                ]
+        line1, = ax.plot(SNR, SINR_mvdr, color=colors[0], label="MVDR", linestyle=linestyle[0], linewidth=2)
+        line2, = ax.plot(SNR, SINR_smooth, color=colors[1], label="spatial smooth with 2 subarrays", linestyle="dashdot", linewidth=2)
+        line3, = ax.plot(SNR, SINR_proposed, color=colors[2], label="proposed", linestyle=(0, (5, 1)), linewidth=2)
+        line4, = ax.plot(SNR, SINR_duvall_based, color=colors[3], label="method in [14]", linestyle=linestyle[3], linewidth=2)
+        line5, = ax.plot(SNR, SINR_smooth8, color=colors[4], label="spatial smooth with 8 subarrays", linestyle=linestyle[1], linewidth=2)
+        ax.legend()
+        ax.set_xlabel("SNR(dB)")
+        ax.set_ylabel("SINR(dB)")
+        savefig((fig, ax), "SINR compare.svg")
+
+    def example6():
+        """
+        SINR simulation, mvdr, duvall based, proposed, smooth
+        """
+        def sinr(weight, only_noise, only_desired, only_interference):
+            cal_pow = lambda x: np.abs(np.sum(x * np.conjugate(x))) / x.size
+            desired = np.squeeze(np.conjugate(weight.T) @ only_desired)
+            noise = np.squeeze(np.conjugate(weight.T) @ only_noise)
+            interference = np.squeeze(np.conjugate(weight.T) @ only_interference)
+            real_value = cal_pow(desired) / (cal_pow(noise) + cal_pow(interference))
+            return 10 * np.log10(real_value)
+
+        expect_theta = 0
+        interference_theta = 20
+        sample_pointss = range(16, 40)
+        aray_16 = aray_maker(16)
+        aray_16.noise_reproducible = False
+
+        coherent_interference = signl.LfmWave2D(theta=interference_theta)
+
+        snr = 0
+        mvdr_cum = np.zeros(len(sample_pointss))
+        duvall_based_cum = np.zeros(len(sample_pointss))
+        proposed_cum = np.zeros(len(sample_pointss))
+        smooth_cum = np.zeros(len(sample_pointss))
+        smooth8_cum = np.zeros(len(sample_pointss))
+
+        for _ in range(1000):
+
+            SINR_mvdr = []
+            SINR_duvall_based = []
+            SINR_proposed = []
+            SINR_smooth = []
+            SINR_smooth8 = []
+
+            for sample_points in sample_pointss:
+
+                desired_signal = signl.LfmWave2D(amplitude=decibel2val(snr), theta=expect_theta)
+                ###
+                aray_16.remove_all_signal()
+                aray_16.noise_power = 1
+                aray_16.receive_signal(desired_signal)
+                aray_16.receive_signal(coherent_interference)
+                aray_16.sample(sample_points)
+                output = aray_16.output
+                aray_16.remove_all_signal()
+                aray_16.sample(sample_points)
+                only_noise_output = aray_16.output
+                aray_16.noise_power = 0
+                aray_16.receive_signal(desired_signal)
+                aray_16.sample(sample_points)
+                only_desired_output = aray_16.output
+                aray_16.remove_all_signal()
+                aray_16.receive_signal(coherent_interference)
+                aray_16.sample(sample_points)
+                only_interference_output = aray_16.output
+                ###
+                mvdr_weight = mvdr(output, expect_theta, aray_16.steer_vector)
+                yang_ho_chi_weight = yang_ho_chi(output, 1, aray_16.steer_vector, expect_theta)
+                smooth_weight = smooth(output, expect_theta, aray_16.steer_vector)
+                proposed_weight = duvall(output, expect_theta, aray_16.steer_vector)
+                smooth8_weight = smooth2(output, expect_theta, 8, aray_16.steer_vector)
+                ###
+                mvdr_sinr = sinr(mvdr_weight, only_noise_output, only_desired_output, only_interference_output)
+                yang_ho_chi_sinr = sinr(yang_ho_chi_weight, only_noise_output[:15, :], only_desired_output[:15, :], only_interference_output[:15, :])
+                smooth_sinr = sinr(smooth_weight, only_noise_output[:15, :], only_desired_output[:15, :], only_interference_output[:15, :])
+                proposed_sinr = sinr(proposed_weight, only_noise_output[:15, :], only_desired_output[:15, :], only_interference_output[:15, :])
+                smooth8_sinr = sinr(smooth8_weight, only_noise_output[:8, :], only_desired_output[:8, :], only_interference_output[:8, :])
+                ###
+                SINR_mvdr.append(mvdr_sinr)
+                SINR_duvall_based.append(yang_ho_chi_sinr)
+                SINR_proposed.append(proposed_sinr)
+                SINR_smooth.append(smooth_sinr)
+                SINR_smooth8.append(smooth8_sinr)
+            mvdr_cum += np.array(SINR_mvdr)
+            duvall_based_cum += np.array(SINR_duvall_based)
+            proposed_cum += np.array(SINR_proposed)
+            smooth_cum += np.array(SINR_smooth)
+            smooth8_cum += np.array(SINR_smooth8)
+        SINR_mvdr = mvdr_cum / 1000
+        SINR_duvall_based = duvall_based_cum / 1000
+        SINR_proposed = proposed_cum / 1000
+        SINR_duvall_based = duvall_based_cum / 1000
+        SINR_smooth8 = smooth8_cum / 1000
+
+        fig, ax = plt.subplots()
+        colors = ['#037ef3', '#f85a40', '#00c16e', '#7552cc', '#0cb9c1', '#f48924', '#ffc845', '#a51890']
+        linestyle = [
+                (0, ()),
+                (0, (5, 1, 1, 1)),
+                (0, (3, 1, 1, 1)),
+                (0, (3, 1, 1, 1, 1, 1))
+                ]
+        line1, = ax.plot(sample_pointss, SINR_mvdr, color=colors[0], label="MVDR", linestyle=linestyle[0], linewidth=2)
+        line2, = ax.plot(sample_pointss, SINR_smooth, color=colors[1], label="spatial smooth with 2 subarrays", linestyle="dashdot", linewidth=2)
+        line3, = ax.plot(sample_pointss, SINR_proposed, color=colors[2], label="proposed", linestyle=(0, (5, 1)), linewidth=2)
+        line4, = ax.plot(sample_pointss, SINR_duvall_based, color=colors[3], label="method in [14]", linestyle=linestyle[3], linewidth=2)
+        line5, = ax.plot(sample_pointss, SINR_smooth8, color=colors[4], label="spatial smooth with 8 subarrays", linestyle=linestyle[1], linewidth=2)
+        ax.legend()
+        ax.set_xlabel("snapshots")
+        ax.set_ylabel("SINR")
+        savefig((fig, ax), "SINR vs snapshops.svg")
+
+    def example7():
+        aray_16 = aray_maker(16)
+        aray_15 = aray_maker(15)
+        aray_8 = aray_maker(8)
+        snr = 0
+        inr = 10
+
+        desired_signal = signl.LfmWave2D(theta=0, amplitude=decibel2val(snr))
+        coherent_interference = signl.LfmWave2D(theta=20, amplitude=decibel2val(inr))
+        desired_signal = signl.CosWave2D(amplitude=decibel2val(snr))
+        coherent_interference = signl.CosWave2D(theta=20, amplitude=decibel2val(inr))
+        aray_16.receive_signal(desired_signal)
+        aray_16.receive_signal(coherent_interference)
+        aray_16.sample(1024)
+        output = aray_16.output
+
+        smooth_weight = smooth(output, 0, aray_16.steer_vector)
+        proposed_weight = duvall(output, 0, aray_16.steer_vector)
+        duvall_based_weight = yang_ho_chi(output, 1, aray_16.steer_vector, 0, False)
+        smooth8_weight = smooth2(output, 0, 8, aray_16.steer_vector)
+        mvdr_weight = mvdr(output, 0, aray_16.steer_vector)
+
+        fig, ax = plt.subplots()
+        linestyle = [
+                (0, ()),
+                (0, (5, 1, 1, 1)),
+                (0, (3, 1, 1, 1)),
+                (0, (3, 1, 1, 1, 1, 1))
+                ]
+        colors = ['#037ef3', '#f85a40', '#00c16e', '#7552cc', '#0cb9c1', '#f48924', '#ffc845', '#a51890']
+        aray_16.response_plot(mvdr_weight, (fig, ax), color=colors[0], linestyle=linestyle[0], linewidth=2, label="MVDR")
+        aray_15.response_plot(smooth_weight, (fig, ax), color=colors[1], linestyle="dashdot", linewidth=2, label="spatial smooth with 2 subarrays")
+        aray_15.response_plot(proposed_weight, (fig, ax), color=colors[2], linestyle=linestyle[1], linewidth=2, label="proposed")
+        aray_15.response_plot(duvall_based_weight, (fig, ax), color=colors[3], linestyle=linestyle[2], linewidth=2, label="method in [14]")
+        aray_8.response_plot(smooth8_weight, (fig, ax), color=colors[4], linestyle="dashdot", linewidth=2, label="spatial smooth with 8 subarrays")
+        ax.axvline(20, linestyle=(0, (5, 1)))
+        ax.set_xlabel("degree(\u00b0)")
+        ax.legend()
+        savefig((fig, ax), "pattern compare.svg")
+
+    example1()  # animation of beamform.
     # example2()
-    colors = ['#037ef3', '#f85a40', '#00c16e', '#7552cc', '#0cb9c1', '#f48924', '#ffc845', '#a51890']
-    plt.rcParams['axes.prop_cycle'] = cycler(color=colors)
-    plt.rcParams['lines.linewidth'] = 2
-    fig_special, ax_special = plt.subplots(2, 2, figsize=(8, 8), constrained_layout=False)
-    example3("lfm")
-    example3("lll")
-    savefig((fig_special, ax_special), "compare.svg")
+    fig_special, ax_special = plt.subplots(2, 2, constrained_layout=True)
+    # example3("lfm")
     # example4()
+    # example5()  # SINR vers SNR
+    # example6()  # SINR vers snapshots
+    # example7()  # pattern comparsion
 
 def data_generator():
     """

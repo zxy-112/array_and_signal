@@ -229,6 +229,15 @@ def smooth(output, expect_theta, steer_func):
     cov = (cov1 + cov2 ) / 2
     return np.linalg.pinv(cov) @ steer_func(expect_theta)[:-1, :]
 
+def smooth2(output, expect_theta, subarray_num, steer_func):
+    covs = []
+    ele_num = output.shape[0]
+    syn_num = ele_num - subarray_num
+    for k in range(subarray_num):
+        covs.append(calcu_cov(output[k: k+syn_num, :]))
+    cov = sum(covs) / subarray_num
+    return np.linalg.pinv(cov) @ steer_func(expect_theta)[:syn_num, :]
+
 def output_noise_power(noise_power, weight):
     res = 0
     for item in weight.flatten():
