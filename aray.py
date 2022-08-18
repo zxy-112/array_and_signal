@@ -20,7 +20,7 @@ class Element:
 
 class ReferenceElement(Element):
     """
-    参考阵元，基准阵元
+    reference element
     """
 
     def __init__(self):
@@ -36,16 +36,17 @@ class Array:
     def __init__(self, size, reference_position):
         assert self.check_size(size)
         self.size = size
-        assert self.check_position(reference_position), "参考位置错误"
+        assert self.check_position(reference_position), "wrong reference position"
         self.reference = ReferenceElement()
         self.reference.add_to(self, reference_position)
         self.elements = []
         # self.noise = signl.GaussionNoise()
         self.sample_points = None
+        self.reproudcibleSeed = {}
 
     @property
     def output(self):
-        assert self.sample_points is not None, '尚未采样，首先使用sample方法采样'
+        assert self.sample_points is not None, 'not sampling yet, first use sample method to sample'
         res = []
         for element in self.elements:
             res.append(self.signal_at(element))
@@ -61,44 +62,47 @@ class Array:
 
     def add_element(self, element, position):
         """
-        通过该方法来添加阵元
+        add element to array with this method
         """
-        assert isinstance(element, Element), '只能添加Element'
-        assert self.check_position(position), '不合法的放置位置'
-        assert element not in self.elements, '不能重复添加阵元'
+        assert isinstance(element, Element), 'only aray.Element is allowed'
+        assert self.check_position(position), 'invalid position'
+        assert element not in self.elements, 'can not add repeated element'
         self.elements.append(element)
         element.add_to(self, position)
 
     def receive_signal(self, signal):
         """
-        通过此方法入射信号
+        receive signal with this method
         """
-        assert self.check_signal(signal), "{} 不是一个有效的信号".format(signal)
+        assert self.check_signal(signal), "{} is not a valid signal".format(signal)
         self.reference.signals.append(signal)
 
     def sample(self, points):
         """
-        对接收到的信号采样
+        sample received signal
         """
-        assert isinstance(points, int) and points > 0, '信号点数错误'
+        assert isinstance(points, int) and points > 0, 'invalid sample points'
         for signal in self.signals:
             signal.sample(points)
         self.sample_points = points
 
     def signal_at(self, element):
-        assert element in self.elements, '该阵元不在阵列上'
-        assert self.sample_points is not None, '需要先对信号采样，先应用sample方法'
+        assert element in self.elements, 'the element is not on array'
+        assert self.sample_points is not None, 'not sampling yet, use sample method to sample'
         amplitude = np.sqrt(self.noise_power / 2)
         if self.noise_reproducible:
-            index = self.elements.index(element)
-            rng = np.random.default_rng(seed=index)
+            if element in self.reproudcibleSeed:
+                pass
+            else:
+                self.reproudcibleSeed[element] = np.random.randint(1e6)
+            rng = np.random.default_rng(seed=self.reproudcibleSeed[element])
         else:
             rng = np.random.default_rng()
         noise = rng.standard_normal(self.sample_points) * amplitude + rng.standard_normal(self.sample_points) * amplitude * 1j
         return np.sum(self._signal_at(element), axis=0, keepdims=False) + noise
 
     def remove_element(self, element):
-        assert element in self.elements, '{}不在阵元上'.format(element)
+        assert element in self.elements, '{} is not on element'.format(element)
         self.elements.remove(element)
         element.remove_from(self)
 
@@ -107,10 +111,10 @@ class Array:
 
     def steer_vector(self, theta):
         """
-        导向矢量，列向量（n*1)
+        return the guide vector, e.g., alpha(theta)
         """
-        assert self.is_good_theta(theta), '角度错误'
-        assert self.elements, '无阵元，无导向矢量'
+        assert self.is_good_theta(theta), 'invalid theta'
+        assert self.elements, 'there is no element on array'
         phase_diff_res = []
         for element in self.elements:
             phase_diff = self.phase_diff_with_theta(element, theta)
@@ -123,11 +127,11 @@ class Array:
 
     def response_at_with(self, theta, weight_vector):
         """
-        在某个角度上的响应
+        response of specified theta with weight
         """
-        assert self.elements, '无阵元，无响应'
-        assert self.is_good_theta(theta), '错误的角度'
-        assert self.check_weight_vector(weight_vector), '权矢量不合法'
+        assert self.elements, 'there is no element'
+        assert self.is_good_theta(theta), 'invalid theta'
+        assert self.check_weight_vector(weight_vector), 'invalid weight'
         res = np.matmul(np.conjugate(weight_vector.T), self.steer_vector(theta))
         return res.item()
 
@@ -136,7 +140,7 @@ class Array:
 
     def _signal_at(self, element):
         """
-        某个阵元上所有的相移后的接收信号，如果没有接受信号返回空的数组
+        all phase shifted signal on element, if there is no signal, reutrn null tuple
         """
         phase_shifted_signal = []
         for signal in self.reference.signals:
@@ -148,31 +152,31 @@ class Array:
 
     def is_good_theta(self, theta):
         """
-        需要重写
+        check if is valid theta
         """
         return True
 
     def is_good_points(self, points):
         """
-        需要重写
+        check if is valid points
         """
         return True
 
     def check_size(self, size):
         """
-        需要重写
+        check if is valid size
         """
         return True
 
     def check_position(self, position):
         """
-        放置位置是否合法，需要重写
+        check if is valid position
         """
         return True
 
     def check_signal(self, signal):
         """
-        需要重写
+        check if is valid signal
         """
         if isinstance(signal, signl.Signal) and isinstance(signal, signl.Wave):
             if signal in self.reference.signals:
@@ -186,32 +190,32 @@ class Array:
 
     def path_diff_with_theta(self, element, theta):
         """
-        需要重写
+        path difference of specified theta
         """
         return 0
 
     def steer_vectors(self, begin, end, points, rettheta):
         """
-        阵列流形，需要重写
+        array mainfold
         """
-        assert self.is_good_theta(begin) and self.is_good_theta(end), '错误的角度'
-        assert self.is_good_points(points), '错误的点数'
-        assert self.elements, '无阵元，无阵列流形'
+        assert self.is_good_theta(begin) and self.is_good_theta(end), 'invalid theta'
+        assert self.is_good_points(points), 'invalid points'
+        assert self.elements, 'there is no element on array'
 
     def response_plot(self, weight_vector, fig_ax_pair=None, **plot_kwargs):
         """
-        绘制响应曲线，需要重写
+        plot the amplitude response of the specified weight
         """
         assert self.check_weight_vector(weight_vector)
 
     def response_with(self, begin, end, points, weight_vector, rettheta=False):
         """
-        需要重写
+        return the response of the specified weight
         """
-        assert self.elements, '无阵元，无响应'
-        assert self.is_good_theta(begin) and self.is_good_theta(end), '错误的角度'
-        assert self.is_good_points(points), '错误的点数'
-        assert self.check_weight_vector(weight_vector), '权矢量不合法'
+        assert self.elements, 'there is no element'
+        assert self.is_good_theta(begin) and self.is_good_theta(end), 'invalid theta'
+        assert self.is_good_points(points), 'invalid points'
+        assert self.check_weight_vector(weight_vector), 'invalid weight'
 
 class LineArray(Array):
 
@@ -299,9 +303,9 @@ class UniformLineArray(LineArray):
 
     def __init__(self, length=float('inf'), reference_position=0, interval=0.5):
         """
-        默认间隔为半波长
+        the default space of elements is half wavelenght, e.g., 0.5
         """
-        assert isinstance(interval, (int, float)) and interval > 0, '错误的阵元间距'
+        assert isinstance(interval, (int, float)) and interval > 0, 'invalid interval'
         LineArray.__init__(self, length, reference_position)
         self.interval = interval
         self.position_of_first = 0
@@ -325,7 +329,7 @@ class UniformLineArray(LineArray):
                 'sample_points'
                 ]
         for key in keys_needed:
-            assert key in settings, '设置中缺少{}'.format(key)
+            assert key in settings, 'there misses {}'.format(key)
         newly_created = UniformLineArray(
                 settings['length'],
                 settings['reference_position'],

@@ -14,7 +14,7 @@ def normalize(x):
 class Signal:
 
     def __init__(self, signal_length=10e-6, amplitude=1, fre_shift=0, phase_shift=0, delay=0, signal_type='expect'):
-        assert is_positive(signal_length), '信号长度为正数值'
+        assert is_positive(signal_length), 'invalid signal length'
         assert is_positive(amplitude)
         for item in (fre_shift, phase_shift, delay):
             assert is_num(item)
@@ -30,14 +30,14 @@ class Signal:
 
     def sample(self, points):
         """
-        指定信号采样点数
+        sample the signal with specified points
         """
-        assert isinstance(points, int) and points >=0, '采样点数不正确'
+        assert isinstance(points, int) and points >=0, 'invalid sample points'
         if points == 0:
             self._signal = None
         else:
             t, self.interval = np.linspace(0, self.signal_length, points, endpoint=False, retstep=True)
-            self._signal = self.expression(t)
+            self._signal = self.amplitude * self.expression(t)
             if self.delay:
                 delay_points = floor(self.delay * points / self.signal_length)
                 if delay_points > 0:
@@ -48,15 +48,15 @@ class Signal:
 
     def expression(self, t):
         """
-        信号表达式，需要重写
+        the mathematical expression of the signal
         """
-        return self.amplitude * np.exp(1j * 2 * np.pi * self.fre_shift * t) * np.exp(1j * self.phase_shift)
+        return np.exp(1j * 2 * np.pi * self.fre_shift * t) * np.exp(1j * self.phase_shift)
 
     def plot(self, from_to=(None, None), fig_ax_pair=(None, None), **plt_kwargs):
         """
-        绘制信号波形，某些信号需要重写以使图形美观
+        plot the waveform of the signal
         """
-        assert self._signal is not None, '无信号无法绘图'
+        assert self._signal is not None, 'no signal, maybe first sample using sample method'
         fig, ax = fig_ax_pair
         if fig is None:
             fig, ax = plt.subplots()
@@ -68,7 +68,7 @@ class Signal:
         return fig, ax
 
     def fft_plot(self, from_to=(None, None), fig_ax_pair=(None, None), **plt_kwargs):
-        assert self._signal is not None, '无信号无法绘图'
+        assert self._signal is not None, 'no signal, maybe first sample using sample method'
         fig, ax = fig_ax_pair
         if fig is None:
             fig, ax = plt.subplots()
@@ -85,8 +85,8 @@ class Signal:
         return fig, ax
 
     def check(self, begin, end):
-        assert isinstance(begin, int) and isinstance(end, int), '必须为整数'
-        assert 0 <= begin < end <= len(self._signal), '超出了范围'
+        assert isinstance(begin, int) and isinstance(end, int), 'invalid begin or end'
+        assert 0 <= begin < end <= len(self._signal), 'invalid begin or end'
 
     def format(self, from_to):
         begin, end = from_to
@@ -99,20 +99,20 @@ class Signal:
     @property
     def band_width(self):
         """
-        信号带宽，需要重写
+        bandwidth of the signal
         """
         return 1 / self.signal_length
 
     @property
     def signal(self):
         """
-        需要sample后才有信号
+        return the signal
         """
-        assert self._signal is not None, '需要先采样'
+        assert self._signal is not None, 'not sampling yet, first sample using sample method'
         if self._signal is not None:
             return self._signal
         else:
-            raise NoSampleError('信号未采样')
+            raise NoSampleError('not sampling yet, first sample using sample method')
 
     def __str__(self):
         return 'Signal with length {} at {}'.format(self.signal_length, id(self))
@@ -125,19 +125,19 @@ class Wave:
 class Wave2D(Wave):
 
     def __init__(self, theta=0):
-        assert isinstance(theta, (int, float)) and -90 <= theta <= 90, '入射角不合法'
+        assert isinstance(theta, (int, float)) and -90 <= theta <= 90, 'invalid theta'
         Wave.__init__(self, theta)
 
 class Wave3D(Wave):
 
     def __init__(self, theta=(0, 0)):
-        assert isinstance(theta, (tuple, list)) and len(theta) == 2, '入射角不合法'
+        assert isinstance(theta, (tuple, list)) and len(theta) == 2, 'invalid theta'
         Wave.__init__(self, theta)
 
 class Lfm(Signal):
 
     def __init__(self, signal_length=10e-6, band_width=10e6, amplitude=1, fre_shift=0, phase_shift=0, delay=0, signal_type='expect'):
-        assert isinstance(band_width, (int, float)) and band_width > 0, '信号带宽不合法'
+        assert isinstance(band_width, (int, float)) and band_width > 0, 'invalid bandwidth'
         Signal.__init__(
                 self,
                 signal_length=signal_length,
@@ -160,12 +160,12 @@ class Lfm(Signal):
 
     @band_width.setter
     def band_width(self, value):
-        assert isinstance(value, (int, float)) and value > 0, '信号带宽不合法'
+        assert isinstance(value, (int, float)) and value > 0, 'invalid bandwidth'
         self._band_width = value
 
 class LfmWave2D(Lfm, Wave2D):
     """
-    可以入射到线阵
+    can be received by lineArray
     """
 
     def __init__(self, theta=0, signal_length=10e-6, band_width=10e6, amplitude=1, fre_shift=0, phase_shift=0, delay=0, signal_type='expect'):

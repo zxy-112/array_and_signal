@@ -7,6 +7,7 @@ pinv = np.linalg.pinv
 pinv_fast = lambda x: pinv(x, hermitian=True)
 fft = lambda x: np.fft.fftshift(np.fft.fft(x))
 fftfreq = lambda m: np.fft.fftshift(np.fft.fftfreq(m))
+calcPow = lambda x: np.abs(np.sum(x * np.conjugate(x))) / x.size
 
 def normalize(x):
     if np.any(x):
@@ -14,9 +15,19 @@ def normalize(x):
     else:
         return x
 
-def value_to_decibel(vector):
-    res = 20 * np.log10(vector / np.max(vector))
-    res[res < -70] = -70
+def value_to_decibel(vector, minRes=-70):
+    if np.all(vector):
+        res = 20 * np.log10(vector / np.max(vector))
+        res[res < minRes] = minRes
+    elif np.any(vector):
+        zerosIndex = res == 0
+        notZerosIndex = ~zerosIndex
+        res = np.zeros(vector.shape, dtype=np.float128)
+        res[notZerosIndex] = 20 * np.log10(vector[notZerosIndex] / np.max(vector[notZerosIndex]))
+        res[zerosIndex] = minRes
+        res[res < minRes] = minRes
+    else:
+        res = np.ones(vector.shape, dtype=np.float128) * minRes
     return res
 
 def make_dic_maker(dic):
@@ -38,11 +49,15 @@ def hermitian(matrix):
 def calcu_cov(output):
     return np.matmul(output, hermitian(output)) / len(output)
 
-def mvdr(output, expect_theta, steer_func):
+def mvdr(output, expect_theta, steer_func, returnOutput=False):
     inv_mat = pinv(calcu_cov(output))
     steer_vector = steer_func(expect_theta)
     temp = np.matmul(inv_mat, steer_vector)
-    return temp / (hermitian(steer_vector) @ inv_mat @ steer_vector).item()
+    weightVec = temp / (hermitian(steer_vector) @ inv_mat @ steer_vector).item()
+    if not returnOutput:
+        return weightVec
+    else:
+        return weightVec, np.squeeze(np.conjugate(weightVec.T) @ output)
 
 def my_plot(*args, fig_ax_pair=(None, None), num=None, **kwargs):
     if fig_ax_pair == (None, None):
@@ -99,7 +114,7 @@ def cal_f_vec(coherent_theta):
         f_vec.append(0)
     return np.array([[item] for item in f_vec])
 
-def mcmv(output, expect_theta, coherent_theta, steer_func):
+def mcmv(output, expect_theta, coherent_theta, steer_func, returnOutput=False):
     inv_cov = f_then_g(pinv_fast, calcu_cov)(output)
     matrix_ac = cal_ac(expect_theta, coherent_theta, steer_func)
     vector_f = cal_f_vec(coherent_theta)
@@ -109,7 +124,10 @@ def mcmv(output, expect_theta, coherent_theta, steer_func):
             pinv(hermitian(matrix_ac) @ inv_cov @ matrix_ac) @
             vector_f
             )
-    return mcmv_weight
+    if returnOutput:
+        return mcmv_weight, np.squeeze(np.conjugate(mcmv_weight.T) @ output)
+    else:
+        return mcmv_weight
 
 def exactly(expect_theta, snr, interference_theta, inr, sigma_power, steer_func):
     a0 = steer_func(expect_theta)
@@ -122,7 +140,6 @@ def exactly(expect_theta, snr, interference_theta, inr, sigma_power, steer_func)
 def ctmv(output, expect_theta, coherent_theta, steer_func, sigma_power, diagonal_load=0):
     cov_mat = calcu_cov(output)
     cov_mat_loaded = cov_mat + diagonal_load * np.eye(len(cov_mat))
-    inv_cov = pinv_fast(cov_mat)
     inv_loaded_cov = pinv_fast(cov_mat_loaded)
     matrix_ac = cal_ac(expect_theta, coherent_theta, steer_func)
     matrix_bc = cal_bc(coherent_theta, steer_func)
@@ -178,7 +195,7 @@ def ctp(output, expect_theta, coherent_theta, steer_func, sigma_power):
     max_index = max(range(count+1), key=lambda index: np.linalg.norm((np.eye(len(cov_mat)) - matrix_t @ hermitian(matrix_t)) @ u2[:, index: index+1]))
     return (np.eye(len(cov_mat)) - matrix_t @ hermitian(matrix_t)) @ u2[:, max_index: max_index+1]
 
-def duvall(output, expect_theta, steer_func, retoutput=False):
+def proposed(output, expect_theta, steer_func, retoutput=False):
     steer_vector = steer_func(expect_theta)
     output_2 = np.conjugate(steer_vector[1][0]) * output
     delta = output[:-1, :] - output_2[1:, :]
@@ -221,28 +238,44 @@ def data_generate(data_iterable, save_path):
         json.dump(info_dic, f, indent=4)
 
 def eval_power(signal):
-    return np.sum(signal * hermitian(signal)) / signal.size
+    return np.abs(np.sum(signal * hermitian(signal))) / signal.size
 
-def smooth(output, expect_theta, steer_func):
+def smooth(output, expect_theta, steer_func, returnOutput=False):
     cov1 = calcu_cov(output[:-1, :])
     cov2 = calcu_cov(output[1:, :])
     cov = (cov1 + cov2 ) / 2
-    return np.linalg.pinv(cov) @ steer_func(expect_theta)[:-1, :]
+    weight = np.linalg.pinv(cov) @ steer_func(expect_theta)[:-1, :] 
+    if returnOutput:
+        return weight, np.squeeze(np.conjugate(weight.T) @ output[:-1, :])
+    else:
+        return weight
 
-def smooth2(output, expect_theta, subarray_num, steer_func):
+def smooth2(output, expect_theta, subarray_num, steer_func, returnOutput=False):
     covs = []
     ele_num = output.shape[0]
-    syn_num = ele_num - subarray_num
+    syn_num = ele_num - subarray_num + 1
     for k in range(subarray_num):
         covs.append(calcu_cov(output[k: k+syn_num, :]))
     cov = sum(covs) / subarray_num
-    return np.linalg.pinv(cov) @ steer_func(expect_theta)[:syn_num, :]
+    weightVec = np.linalg.pinv(cov) @ steer_func(expect_theta)[:syn_num, :]
+    if returnOutput:
+        return weightVec, np.squeeze(np.conjugate(weightVec.T) @ output[:ele_num+1-subarray_num, :])
+    else:
+        return weightVec
 
 def output_noise_power(noise_power, weight):
     res = 0
     for item in weight.flatten():
         res += item * np.conjugate(item)
     return noise_power * res
+
+def calcSINR(weight, expect, interference, noise):
+    weightLen = weight.size
+    synExpect = np.squeeze(np.conjugate(weight.T) @ expect[:weightLen, :])
+    synInterference = np.squeeze(np.conjugate(weight.T) @ interference[:weightLen, :])
+    synNoise = np.squeeze(np.conjugate(weight.T) @ noise[:weightLen, :])
+    realValue = calcPow(synExpect) / (calcPow(synInterference) + calcPow(synNoise))
+    return 10 * np.log(realValue)
 
 if __name__ == '__main__':
     test_data = ((1, 2, {'name': 'zxy', 'age': 22}) for _ in range(1))
