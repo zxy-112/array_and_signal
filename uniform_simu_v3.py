@@ -8,7 +8,6 @@ import matplotlib.lines as mlines
 import matplotlib.animation as animation
 import matplotlib.gridspec as gridspec
 import matplotlib.figure as figure
-from cycler import cycler
 import aray
 import signl
 from utils import *
@@ -254,7 +253,7 @@ def beamformAnimation():
         lineForAmplitudeResponse.set_ydata(value_to_decibel(np.abs(response), minRes=-50))
 
     ani = animation.FuncAnimation(figForAni, ani_func, frames=samplePoints, interval=2)
-    ani.save('mvdr输入和输出.mp4', dpi=200, fps=60)
+    ani.save('mvdr输入和输出.mp4', writer="ffmpeg", dpi=200, fps=60)
 
 def data_generator():
     """
